@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kardex Fimas - Configuraci&oacute;n</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b1220'/%3E%3Cpath d='M8 22V10h4l4 7 4-7h4v12h-3v-7l-3.2 6h-3.6L11 15v7z' fill='%2338bdf8'/%3E%3C/svg%3E" />
+<style>
+  :root{--line:#e2e8f0;--muted:#64748b;--ink:#0f172a;--brand:#1d4ed8;--ok:#047857;--err:#b91c1c}
+  *{box-sizing:border-box}
+  body{margin:0;background:#f1f5f9;color:var(--ink);font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{background:#fff;border-bottom:1px solid var(--line);padding:16px 24px}
+  header h1{margin:0;font-size:19px}
+  header p{margin:5px 0 0;font-size:12.5px;color:var(--muted)}
+
+  /* ===== Panel de Control: menú lateral ===== */
+  .shell{display:flex;min-height:100vh}
+  .side{flex:none;width:252px;min-height:100vh;background:#0b1220;color:#cbd5e1;
+        display:flex;flex-direction:column;gap:16px;padding:16px 14px;position:sticky;top:0;height:100vh;overflow:auto}
+  .side-title{font-size:10.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#7dd3fc}
+  .side-sub{font-size:17px;font-weight:800;color:#fff;margin-top:2px}
+  .side-nav{display:flex;flex-direction:column;gap:8px}
+  .sn{display:flex;align-items:center;gap:11px;text-decoration:none;color:#cbd5e1;font-size:13.5px;
+      font-weight:600;padding:11px 13px;border-radius:12px;background:#16233a;border:1px solid #1e2f4a}
+  .sn .ic{font-size:16px;flex:none}
+  .sn:hover{background:#1c2f4d;color:#fff}
+  .sn.on{background:#1e40af;border-color:#3b82f6;color:#fff}
+  .side-foot{margin-top:auto;display:flex;flex-direction:column;gap:10px}
+  .side-foot .who{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.06);
+                  border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px}
+  .side-foot .who div{line-height:1.25;min-width:0}
+  .side-foot .who b{display:block;font-size:12.5px;color:#e2e8f0}
+  .side-foot .who span{font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:#7dd3fc}
+  .side-foot .avatar{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;
+                     font-size:11.5px;font-weight:700;color:#fff;background:linear-gradient(135deg,#38bdf8,#1d4ed8)}
+  .side-foot button{font-size:12px;font-weight:600;padding:8px 12px;border-radius:9px;cursor:pointer;
+                    border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#e2e8f0}
+  .side-foot button:hover{background:rgba(255,255,255,.18)}
+  .content{flex:1;min-width:0}
+  @media(max-width:860px){.shell{flex-direction:column}.side{position:static;width:100%;min-height:0;height:auto}
+    .side-nav{flex-direction:row;flex-wrap:wrap}.side-foot{flex-direction:row;flex-wrap:wrap;margin-top:0}}
+
+  .wrap{max-width:1080px;margin:0 auto;padding:18px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px}
+  .card h2{margin:0 0 4px;font-size:14.5px}
+  .hint-top{font-size:12.5px;color:var(--muted)}
+  .fila{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 4px;
+        border-bottom:1px solid #f1f5f9}
+  .fila:last-child{border-bottom:0}
+  .fila span{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+  .fila b{font-size:13.5px;text-align:right;overflow-wrap:anywhere}
+  code{font-family:Consolas,Monaco,monospace;font-size:12.5px;background:#f1f5f9;border:1px solid var(--line);
+       border-radius:6px;padding:2px 8px}
+  .empty{padding:26px;text-align:center;color:var(--muted)}
+  .denied{max-width:560px;margin:40px auto;background:#fff;border:1px solid var(--line);border-radius:14px;
+          padding:34px;text-align:center}
+  .denied h3{margin:0 0 10px;font-size:18px;color:var(--err)}
+  .denied p{margin:0;color:#475569;font-size:14px;line-height:1.6}
+  .overlay{position:fixed;inset:0;background:rgba(11,18,32,.62);display:none;place-items:center;padding:20px;z-index:60}
+  .overlay>div{width:100%;max-width:440px;background:#fff;border-radius:16px;padding:26px;text-align:center}
+  .overlay h3{margin:0 0 8px;font-size:17px}
+  .overlay p{color:#475569;font-size:14px;line-height:1.6;margin:0 0 18px}
+  .overlay button{width:100%;padding:12px;font-weight:600;border-radius:10px;background:var(--brand);color:#fff;border:0;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div>
+      <div class="side-title">Panel de Control</div>
+      <div class="side-sub">Fimas</div>
+    </div>
+    <nav class="side-nav" id="sideNav">
+      <a href="/despacho" class="sn" id="navDespacho"><span class="ic">📦</span>Despacho</a>
+      <a href="/devoluciones" class="sn" id="navDevoluciones"><span class="ic">↩️</span>Devoluciones</a>
+      <a href="/" class="sn" id="navKardex"><span class="ic">🗂️</span>Kardex</a>
+      <a href="/permisos" class="sn" id="navPermisos"><span class="ic">🔒</span>Permisos</a>
+      <a href="/configuracion" class="sn on" id="navConfig"><span class="ic">⚙️</span>Configuraci&oacute;n</a>
+    </nav>
+    <div class="side-foot">
+      <div class="who">
+        <div class="avatar" id="avatar">K</div>
+        <div><b id="userName">&nbsp;</b><span id="userRole">&nbsp;</span></div>
+      </div>
+      <button id="btnSalir">Cerrar sesi&oacute;n</button>
+    </div>
+  </aside>
+
+  <div class="content">
+    <header>
+      <h1>Configuraci&oacute;n del sistema</h1>
+      <p>Ajustes generales del Panel de Control (Fimas).</p>
+    </header>
+
+    <div class="wrap" id="wrap">
+      <section class="card">
+        <h2>Origen de datos</h2>
+        <span class="hint-top">Conexi&oacute;n configurada en el servidor local.</span>
+        <div style="margin-top:8px" id="cfgOrigen"></div>
+      </section>
+
+      <section class="card">
+        <h2>Compa&ntilde;&iacute;as disponibles</h2>
+        <span class="hint-top">Empresas que reportan saldos y movimientos de stock.</span>
+        <div style="margin-top:8px" id="cfgEmpresas"></div>
+      </section>
+
+      <section class="card">
+        <h2>M&oacute;dulos activos</h2>
+        <span class="hint-top">Cat&aacute;logo de m&oacute;dulos habilitados en el sistema.</span>
+        <div style="margin-top:8px" id="cfgModulos"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ovErr">
+  <div>
+    <h3 id="eTitle">No se pudo completar</h3>
+    <p id="eMsg"></p>
+    <button id="eBtn">Aceptar</button>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function modalError(msg, titulo) {
+  $("#eTitle").textContent = titulo || "No se pudo completar";
+  $("#eMsg").textContent = msg;
+  $("#ovErr").style.display = "grid";
+}
+$("#eBtn").addEventListener("click", () => $("#ovErr").style.display = "none");
+
+$("#btnSalir").addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  location.href = "/login";
+});
+
+async function pedir(url) {
+  const r = await fetch(url);
+  if (r.status === 401) { location.href = "/login"; throw new Error("sesion expirada"); }
+  let j = {};
+  try { j = await r.json(); } catch (_) {}
+  if (!r.ok) throw Object.assign(new Error(j.mensaje || j.error || "Operación no permitida"), { j });
+  return j;
+}
+
+(async function init() {
+  try {
+    const me = await pedir("/api/auth/me");
+    const yo = me.usuario;
+    if (yo.rol !== "admin") {
+      $("#wrap").innerHTML = `<div class="denied"><h3>Acceso denegado</h3>
+        <p>Lo siento, no tienes permisos de administrador para acceder a la Configuraci&oacute;n.</p></div>`;
+      return;
+    }
+    $("#userName").textContent = yo.nombre;
+    $("#userRole").textContent = "Administrador Odoo";
+    $("#avatar").textContent = (yo.nombre || "K").trim().charAt(0).toUpperCase();
+
+    const c = await pedir("/api/config");
+    $("#cfgOrigen").innerHTML = [
+      ["Sistema", esc(c.sistema)],
+      ["Origen", esc(c.origen)],
+      ["Servidor Odoo", esc(c.url_odoo)],
+      ["Base de datos", `<code>${esc(c.base_datos)}</code>`],
+    ].map(([t, v]) => `<div class="fila"><span>${t}</span><b>${v}</b></div>`).join("");
+
+    $("#cfgEmpresas").innerHTML = (c.companias || []).length
+      ? c.companias.map(x => `<div class="fila"><span>Empresa</span><b>${esc(x.nombre)}</b></div>`).join("")
+      : `<div class="empty">No hay compa&ntilde;&iacute;as registradas.</div>`;
+
+    const mods = Object.values(c.modulos || {});
+    $("#cfgModulos").innerHTML = mods.length
+      ? mods.map(n => `<div class="fila"><span>M&oacute;dulo</span><b>${esc(n)}</b></div>`).join("")
+      : `<div class="empty">No hay m&oacute;dulos activos.</div>`;
+  } catch (err) {
+    if (err.message === "sesion expirada") return;
+    modalError(err.message || "No fue posible cargar la configuración.");
+  }
+})();
+</script>
+</body>
+</html>

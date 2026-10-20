@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kardex Fimas - Usuarios</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b1220'/%3E%3Cpath d='M8 22V10h4l4 7 4-7h4v12h-3v-7l-3.2 6h-3.6L11 15v7z' fill='%2338bdf8'/%3E%3C/svg%3E" />
+<style>
+  :root{--line:#e2e8f0;--muted:#64748b;--ink:#0f172a;--brand:#1d4ed8;--ok:#047857;--okbg:#ecfdf5;
+        --err:#b91c1c;--errbg:#fef2f2}
+  *{box-sizing:border-box}
+  body{margin:0;background:#f1f5f9;color:var(--ink);font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{background:linear-gradient(135deg,#0f172a,#1e293b 55%,#1e3a8a);color:#fff;padding:18px 26px}
+  .head-row{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
+  header h1{margin:0;font-size:19px}
+  header p{margin:5px 0 0;font-size:12.5px;color:#cbd5e1}
+  .userbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .who{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);
+       border-radius:999px;padding:5px 13px 5px 5px}
+  .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#38bdf8,#1d4ed8);
+          display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
+  .who div{line-height:1.25}
+  .who b{display:block;font-size:12.5px}
+  .who span{font-size:10px;letter-spacing:1.1px;text-transform:uppercase;color:#7dd3fc}
+  .userbar a,.userbar button{font-size:12.5px;padding:7px 13px;border-radius:8px;text-decoration:none;cursor:pointer;
+       border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#e2e8f0}
+  .userbar a:hover,.userbar button:hover{background:rgba(255,255,255,.18)}
+  .wrap{max-width:1240px;margin:0 auto;padding:18px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px}
+  .topbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+  h2{margin:0;font-size:15px}
+  .count{font-size:12px;color:var(--muted)}
+  .count b{color:var(--brand)}
+  button{font:inherit;padding:9px 14px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:600}
+  button.primary:hover{filter:brightness(1.07)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .tablebox{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:auto}
+  table{border-collapse:separate;border-spacing:0;width:100%;font-size:13.5px}
+  thead th{background:#0f172a;color:#fff;text-align:left;padding:11px 13px;font-size:11px;
+           text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+  tbody td{padding:10px 13px;border-top:1px solid var(--line);vertical-align:middle}
+  tbody tr:hover{background:#f8fafc}
+  td.acts{white-space:nowrap;text-align:right}
+  td.acts button{padding:6px 10px;font-size:12px;margin-left:5px}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600}
+  .pill.admin{background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe}
+  .pill.user{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0}
+  .pill.on{background:var(--okbg);color:var(--ok);border:1px solid #a7f3d0}
+  .pill.off{background:var(--errbg);color:var(--err);border:1px solid #fecaca}
+  .av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;
+      color:#fff;flex:none;background:linear-gradient(135deg,#38bdf8,#1d4ed8)}
+  .cel{display:flex;align-items:center;gap:10px}
+  .cel b{display:block;font-size:13.5px}
+  .cel span{display:block;font-size:11.5px;color:var(--muted)}
+  .lock{font-size:11px;color:var(--err)}
+  .empty{padding:26px;text-align:center;color:var(--muted)}
+  /* modal */
+  .overlay{position:fixed;inset:0;background:rgba(11,18,32,.62);backdrop-filter:blur(3px);display:none;
+           place-items:center;padding:20px;z-index:60}
+  .overlay.on{display:grid}
+  .modal{width:100%;max-width:452px;background:#fff;border-radius:16px;box-shadow:0 30px 70px rgba(2,6,23,.4);
+         padding:26px 26px 22px;max-height:92vh;overflow:auto}
+  .modal h3{margin:0 0 4px;font-size:18px}
+  .modal .sub{color:var(--muted);font-size:13px;margin:0 0 18px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+  .full{grid-column:1/-1}
+  label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:#334155;margin-bottom:6px}
+  input,select{width:100%;padding:10px 12px;font:inherit;font-size:14px;border:1px solid var(--line);
+        border-radius:9px;background:#fbfcfe;color:var(--ink)}
+  input:focus,select:focus{outline:none;border-color:var(--brand);background:#fff;box-shadow:0 0 0 4px rgba(29,78,216,.12)}
+  input:disabled{background:#f1f5f9;color:var(--muted)}
+  .hint{grid-column:1/-1;font-size:12px;color:var(--muted);min-height:16px}
+  .hint.err{color:var(--err)}
+  .acts{display:flex;gap:10px;margin-top:6px}
+  .acts button{flex:1;padding:12px;font-weight:600;border-radius:10px;font-size:14.5px}
+  .acts .cancel{background:#fff;color:#334155;border:1px solid var(--line)}
+  .acts .save{background:var(--brand);color:#fff;border-color:var(--brand)}
+  /* modal de error */
+  .errbox .ico{width:54px;height:54px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;
+               background:#fef2f2;border:2px solid #fecaca;color:var(--err)}
+  .errbox .ico svg{width:26px;height:26px}
+  .errbox{text-align:center}
+  .errbox h3{margin-bottom:9px}
+  .errbox p{color:#475569;font-size:14px;line-height:1.6;margin:0 0 20px}
+  .errbox button{width:100%;padding:12px;font-weight:600;border-radius:10px;background:var(--brand);color:#fff;border:0;font-size:14.5px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}.wrap{padding:14px}.who div{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="head-row">
+    <div>
+      <h1>Administraci&oacute;n de usuarios</h1>
+      <p>Kardex Fimas &middot; gesti&oacute;n de accesos al sistema de inventario</p>
+    </div>
+    <div class="userbar">
+      <div class="who">
+        <div class="avatar" id="avatar">K</div>
+        <div><b id="userName">&nbsp;</b><span id="userRole">&nbsp;</span></div>
+      </div>
+      <a href="/">Ir al Kardex</a>
+      <button id="btnSalir">Cerrar sesi&oacute;n</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <div class="topbar">
+      <div>
+        <h2>Usuarios del sistema</h2>
+        <span class="count"><b id="cUsuarios">0</b> de <b>10</b> usuarios registrados</span>
+      </div>
+      <button class="primary" id="btnNuevo">+ Nuevo usuario</button>
+    </div>
+  </section>
+
+  <div class="tablebox">
+    <table>
+      <thead><tr>
+        <th>Usuario</th><th>Rol</th><th>Estado</th><th>&Uacute;ltimo acceso</th><th>Alta</th><th></th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="overlay" id="ovForm">
+  <div class="modal">
+    <h3 id="fTitle">Nuevo usuario</h3>
+    <p class="sub" id="fSub">Complete los datos. La contraseña mínima es de 8 caracteres.</p>
+    <div class="grid">
+      <div class="full"><label for="fNombre">Nombre</label><input id="fNombre" type="text" autocomplete="off" /></div>
+      <div class="full"><label for="fEmail">Correo electr&oacute;nico</label><input id="fEmail" type="email" autocomplete="off" /></div>
+      <div><label for="fRol">Rol</label>
+        <select id="fRol"><option value="usuario">Usuario</option><option value="admin">Administrador</option></select></div>
+      <div><label for="fEstado">Estado</label>
+        <select id="fEstado"><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></div>
+      <div class="full"><label for="fPass">Contrase&ntilde;a</label>
+        <input id="fPass" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres" /></div>
+      <div class="hint" id="fHint">&nbsp;</div>
+      <div class="acts full">
+        <button class="cancel" id="fCancel">Cancelar</button>
+        <button class="save" id="fSave">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ovErr">
+  <div class="modal errbox">
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 8v5"/><circle cx="12" cy="16.6" r=".9" fill="currentColor"/>
+      <path d="M10.3 3.9L2.6 17.2A2 2 0 0 0 4.3 20.2h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div>
+    <h3 id="eTitle">No se pudo completar</h3>
+    <p id="eMsg"></p>
+    <button id="eBtn">Aceptar</button>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let USUARIOS = [], YO = null;
+
+$("#btnSalir").addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  location.href = "/login";
+});
+
+function modalError(msg, titulo = "No se pudo completar") {
+  $("#eTitle").textContent = titulo;
+  $("#eMsg").textContent = msg;
+  $("#ovErr").classList.add("on");
+  setTimeout(() => $("#eBtn").focus(), 40);
+}
+$("#eBtn").addEventListener("click", () => $("#ovErr").classList.remove("on"));
+
+async function pedir(url, opts = {}) {
+  const r = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (r.status === 401) { location.href = "/login"; throw new Error("sesion expirada"); }
+  let j = {};
+  try { j = await r.json(); } catch (_) {}
+  if (!r.ok) throw Object.assign(new Error(j.mensaje || "Operación no permitida"), { j });
+  return j;
+}
+
+const fdate = s => !s || s === "None" ? "Nunca" : s.slice(0, 16).replace("T", " ").slice(0, 16);
+
+function pintar() {
+  $("#cUsuarios").textContent = USUARIOS.length;
+  $("#btnNuevo").disabled = USUARIOS.length >= 10;
+  $("#tbody").innerHTML = USUARIOS.length ? USUARIOS.map(u => {
+    const esYo = YO && u.id === YO.id;
+    const bloqueado = u.bloqueado_hasta && u.bloqueado_hasta.slice(0, 19) > new Date().toISOString().slice(0, 19);
+    return `<tr>
+      <td><div class="cel"><div class="av">${(u.nombre || "?").trim().charAt(0).toUpperCase()}</div>
+        <div><b>${u.nombre}${esYo ? " (usted)" : ""}</b><span>${u.email}</span>
+        ${bloqueado ? `<span class="lock">Bloqueado por intentos fallidos</span>` : ""}</div></div></td>
+      <td><span class="pill ${u.rol === "admin" ? "admin" : "user"}">${u.rol === "admin" ? "Administrador" : "Usuario"}</span></td>
+      <td><span class="pill ${u.estado === "activo" ? "on" : "off"}">${u.estado === "activo" ? "Activo" : "Inactivo"}</span></td>
+      <td>${fdate(u.ultimo_acceso)}</td>
+      <td>${fdate(u.creado_en)}</td>
+      <td class="acts">
+        <button data-edit="${u.id}">Editar</button>
+        <button data-toggle="${u.id}">${u.estado === "activo" ? "Desactivar" : "Activar"}</button>
+        ${esYo ? "" : `<button data-del="${u.id}">Eliminar</button>`}
+      </td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="empty">Sin usuarios registrados.</td></tr>`;
+}
+
+async function cargar() {
+  const d = await pedir("/api/usuarios");
+  USUARIOS = d.usuarios;
+  pintar();
+}
+
+$("#tbody").addEventListener("click", async e => {
+  const ed = e.target.dataset.edit, tg = e.target.dataset.toggle, dl = e.target.dataset.del;
+  if (!ed && !tg && !dl) return;
+  const u = USUARIOS.find(x => x.id === Number(ed || tg || dl));
+  if (!u) return;
+  if (ed) return abrirForm(u);
+  if (tg) {
+    try {
+      await pedir(`/api/usuarios/${u.id}`, { method: "PUT",
+        body: JSON.stringify({ nombre: u.nombre, email: u.email, rol: u.rol,
+                               estado: u.estado === "activo" ? "inactivo" : "activo" }) });
+      await cargar();
+    } catch (err) { modalError(err.message); }
+    return;
+  }
+  if (dl && !confirm(`¿Eliminar definitivamente a ${u.nombre} (${u.email})?`)) return;
+  try {
+    await pedir(`/api/usuarios/${u.id}`, { method: "DELETE" });
+    await cargar();
+  } catch (err) { modalError(err.message); }
+});
+
+let editando = null;
+function abrirForm(u) {
+  editando = u || null;
+  $("#fTitle").textContent = u ? "Editar usuario" : "Nuevo usuario";
+  $("#fSub").textContent = u
+    ? "Deje la contraseña vacía para mantener la actual."
+    : "Complete los datos. La contraseña mínima es de 8 caracteres.";
+  $("#fNombre").value = u ? u.nombre : "";
+  $("#fEmail").value = u ? u.email : "";
+  $("#fRol").value = u ? u.rol : "usuario";
+  $("#fEstado").value = u ? u.estado : "activo";
+  $("#fPass").value = "";
+  $("#fPass").disabled = !u;
+  $("#fHint").textContent = " ";
+  $("#fHint").className = "hint";
+  $("#ovForm").classList.add("on");
+  setTimeout(() => $("#fNombre").focus(), 40);
+}
+$("#btnNuevo").onclick = () => abrirForm(null);
+$("#fCancel").onclick = () => $("#ovForm").classList.remove("on");
+
+$("#fSave").onclick = async () => {
+  const nombre = $("#fNombre").value.trim(), email = $("#fEmail").value.trim(),
+        rol = $("#fRol").value, estado = $("#fEstado").value, pass = $("#fPass").value;
+  const h = $("#fHint"); h.textContent = " "; h.className = "hint";
+  if (nombre.length < 3) { h.textContent = "El nombre debe tener al menos 3 caracteres."; h.className = "hint err"; return; }
+  if (!/^\S+@\S+\.\S+$/.test(email)) { h.textContent = "Ingrese un correo electrónico válido."; h.className = "hint err"; return; }
+  if (!editando && pass.length < 8) { h.textContent = "La contraseña debe tener al menos 8 caracteres."; h.className = "hint err"; return; }
+  const btn = $("#fSave"); btn.disabled = true; btn.textContent = "Guardando...";
+  try {
+    const cuerpo = { nombre, email, rol, estado };
+    if (editando) { await pedir(`/api/usuarios/${editando.id}`, { method: "PUT", body: JSON.stringify(cuerpo) }); }
+    else { cuerpo.password = pass; await pedir("/api/usuarios", { method: "POST", body: JSON.stringify(cuerpo) }); }
+    $("#ovForm").classList.remove("on");
+    await cargar();
+  } catch (err) {
+    h.textContent = err.message; h.className = "hint err";
+  } finally { btn.disabled = false; btn.textContent = "Guardar"; }
+};
+
+(async function init() {
+  try {
+    const me = await pedir("/api/auth/me");
+    if (me.usuario.rol !== "admin") { location.href = "/"; return; }
+    YO = me.usuario;
+    $("#userName").textContent = YO.nombre;
+    $("#userRole").textContent = "Administrador";
+    $("#avatar").textContent = (YO.nombre || "K").trim().charAt(0).toUpperCase();
+    await cargar();
+  } catch (err) {
+    modalError(err.message === "sesion expirada" ? "" : "No fue posible cargar la lista de usuarios.");
+  }
+})();
+</script>
+</body>
+</html>

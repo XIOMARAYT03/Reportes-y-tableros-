@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Reporte Kardex - Odoo (MASERVEN / FINPAC)</title>
+<style>
+  :root{
+    --line:#e2e8f0; --muted:#64748b; --ink:#0f172a; --brand:#1d4ed8;
+    --in:#047857; --inbg:#ecfdf5; --out:#b91c1c; --outbg:#fef2f2; --adj:#a16207; --adjbg:#fefce8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#f1f5f9;color:var(--ink);
+       font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{background:linear-gradient(135deg,#0f172a,#1e293b 55%,#1e3a8a);color:#fff;padding:16px 26px}
+  header h1{margin:0;font-size:19px}
+  header p{margin:5px 0 0;font-size:12.5px;color:#cbd5e1}
+  .head-row{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
+
+  /* ===== Panel de Control: menú lateral ===== */
+  .shell{display:flex;min-height:100vh}
+  .side{flex:none;width:252px;min-height:100vh;background:#0b1220;color:#cbd5e1;
+        display:flex;flex-direction:column;gap:16px;padding:16px 14px;position:sticky;top:0;height:100vh;overflow:auto}
+  .side-title{font-size:10.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#7dd3fc}
+  .side-sub{font-size:17px;font-weight:800;color:#fff;margin-top:2px}
+  .side-nav{display:flex;flex-direction:column;gap:8px}
+  .sn{display:flex;align-items:center;gap:11px;text-decoration:none;color:#cbd5e1;font-size:13.5px;
+      font-weight:600;padding:11px 13px;border-radius:12px;background:#16233a;border:1px solid #1e2f4a}
+  .sn .ic{font-size:16px;flex:none}
+  .sn:hover{background:#1c2f4d;color:#fff}
+  .sn.on{background:#1e40af;border-color:#3b82f6;color:#fff}
+  .side-foot{margin-top:auto;display:flex;flex-direction:column;gap:10px}
+  .side-foot .who{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.06);
+                  border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px}
+  .side-foot .who div{line-height:1.2;min-width:0}
+  .side-foot .who b{display:block;font-size:12.5px;color:#e2e8f0}
+  .side-foot .who span{font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:#7dd3fc}
+  .side-foot .avatar{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;
+                     font-size:11.5px;font-weight:700;color:#fff;background:linear-gradient(135deg,#38bdf8,#1d4ed8)}
+  .side-foot button{font-size:12px;font-weight:600;padding:8px 12px;border-radius:9px;cursor:pointer;
+                    border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#e2e8f0}
+  .side-foot button:hover{background:rgba(255,255,255,.18)}
+  .content{flex:1;min-width:0}
+  @media(max-width:860px){.shell{flex-direction:column}.side{position:static;width:100%;min-height:0;height:auto}
+    .side-nav{flex-direction:row;flex-wrap:wrap}.side-foot{flex-direction:row;flex-wrap:wrap;margin-top:0}}
+  .wrap{max-width:1560px;margin:0 auto;padding:18px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+  .card h3{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
+  .row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+  label{display:flex;flex-direction:column;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+  input,select,button{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  button{cursor:pointer;background:var(--brand);color:#fff;border-color:var(--brand);font-weight:600}
+   button.ghost{background:#fff;color:var(--brand)}
+   button.green{background:#047857;border-color:#047857}
+  tbody td.subrow{white-space:normal;background:#f8fafc;font-size:12px;color:#475569;border-top:0}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .ac{position:relative;min-width:330px}
+  #results{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--line);
+          border-radius:9px;max-height:320px;overflow:auto;z-index:30;display:none;box-shadow:0 12px 28px rgba(15,23,42,.18)}
+  #results div{padding:8px 11px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:13px}
+  #results div:hover{background:#eef2ff}
+  #results small{color:var(--muted);display:block}
+  .chosen{font-size:13px;margin-top:6px;color:var(--muted)}
+  .chosen b{color:var(--ink)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .kpi span{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+  .kpi strong{font-size:20px;display:block;margin:2px 0}
+  .kpi small{font-size:11px;color:var(--muted)}
+  .tablebox{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:68vh}
+  table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
+  thead th{position:sticky;top:0;background:#0f172a;color:#fff;text-align:left;padding:10px 12px;font-size:11px;
+           text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;cursor:pointer}
+  thead th:hover{background:#1e293b}
+  tbody td{padding:8px 12px;border-top:1px solid var(--line);white-space:nowrap}
+  tbody tr:nth-child(even){background:#f8fafc}
+  tbody tr:hover{background:#e0e7ff}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  td.doc{font-family:Consolas,Menlo,monospace;font-size:12px}
+  td.wrap{white-space:normal;max-width:440px}
+  .tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+  .tag.in{background:var(--inbg);color:var(--in);border:1px solid #a7f3d0}
+  .tag.out{background:var(--outbg);color:var(--out);border:1px solid #fecaca}
+  .tag.adj{background:var(--adjbg);color:var(--adj);border:1px solid #fde68a}
+  .tag.int{background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1}
+  tbody tr.int{background:#f8fafc;color:#64748b;font-style:italic}
+  tbody tr.int:hover{background:#eef2f7}
+  tbody tr.int td{border-top-color:#eef2f7}
+  .sw{display:inline-flex;align-items:center;gap:9px;cursor:pointer;user-select:none}
+  .sw input{position:absolute;opacity:0;width:0;height:0}
+  .sw i{width:40px;height:22px;border-radius:999px;background:#cbd5e1;position:relative;transition:background .18s;flex:none}
+  .sw i::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;
+               background:#fff;transition:transform .18s;box-shadow:0 1px 3px rgba(15,23,42,.3)}
+  .sw input:checked + i{background:var(--brand)}
+  .sw input:checked + i::after{transform:translateX(18px)}
+  .sw input:focus-visible + i{outline:3px solid rgba(56,189,248,.5);outline-offset:2px}
+  .sw span{font-size:12px;color:var(--muted);text-transform:none;letter-spacing:0}
+  tfoot td{padding:10px 12px;font-weight:700;background:#e2e8f0;border-top:2px solid #94a3b8;white-space:nowrap}
+  .empty{padding:26px;text-align:center;color:var(--muted);font-size:14px;background:#fff;
+         border:1px solid var(--line);border-radius:12px}
+  .notes{font-size:12.5px;color:#334155}
+  .notes li{margin-bottom:4px}
+  .badge{font-size:11px;background:#e0e7ff;color:#3730a3;border-radius:999px;padding:2px 9px;margin-left:6px}
+  #status{font-size:12.5px;color:var(--muted)}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid #c7d2fe;border-top-color:var(--brand);
+        border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  /* ===== Tablero de despachos: KPIs, gráfico por responsable y tabla ===== */
+  .kpi.pk strong{color:#1d4ed8}
+  .kpi.pa strong{color:#0891b2}
+  .kpi.ou strong{color:#047857}
+  .kpi.tot{background:#0f172a;border-color:#0f172a}
+  .kpi.tot span,.kpi.tot small{color:#94a3b8}
+  .kpi.tot strong{color:#fff}
+
+  .legend{display:flex;flex-wrap:wrap;gap:7px;padding:2px 0 10px}
+  .lg{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:#334155;
+      padding:4px 11px;border-radius:999px;border:1px solid var(--line);background:#f8fafc;cursor:pointer}
+  .lg i{width:11px;height:11px;border-radius:3px;flex:none;}
+  .lg.off{opacity:.38;text-decoration:line-through}
+
+  .chart-area{position:relative;height:300px}
+  .plot{position:absolute;inset:0}
+  .grid{position:absolute;left:46px;right:10px;top:22px;bottom:22px}
+  .gline{position:absolute;left:0;right:0;border-top:1px dashed #e2e8f0}
+  .gline b{position:absolute;right:calc(100% + 8px);top:-7px;font-size:10px;font-weight:600;color:#94a3b8}
+  .gline.zero{border-top:1px solid #cbd5e1;border-style:solid}
+  .groups{position:absolute;left:46px;right:10px;top:22px;bottom:22px;display:flex;align-items:stretch}
+  .gcol{flex:1 1 0;min-width:0;display:flex;align-items:stretch;justify-content:center}
+  .stack{position:relative;display:flex;flex-direction:column;justify-content:flex-end;
+         width:min(44px,56%);height:100%}
+  .seg{position:relative;flex:none;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.85)}
+  .seg span{position:absolute;inset:0;display:grid;place-items:center;font-size:9.5px;font-weight:800;
+            color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+  .bval{position:absolute;left:50%;transform:translateX(-50%);margin-bottom:3px;
+        font-size:10px;font-weight:700;color:#334155;white-space:nowrap}
+  .xrow{position:absolute;left:46px;right:10px;bottom:0;height:22px;display:flex;border-top:1px solid var(--line)}
+  .xl{flex:1 1 0;min-width:0;text-align:center;font-size:10.5px;color:var(--muted);padding-top:3px;
+      overflow:hidden;text-overflow:ellipsis}
+  .chart-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13px}
+
+  .tl{display:flex;flex-direction:column;gap:5px;min-width:220px}
+  .tl-row{display:grid;grid-template-columns:44px 1fr 58px;gap:9px;align-items:center}
+  .tl-lab{font-size:9.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
+          color:#475569;white-space:nowrap}
+  .tl-track{display:block;height:8px;background:#eef2f7;border-radius:999px;overflow:hidden;border:1px solid #e2e8f0}
+  .tl-fill{display:block;height:100%;border-radius:999px}
+  .tl-fill.picking{background:#1d4ed8}
+  .tl-fill.packing{background:#0891b2}
+  .tl-fill.output{background:#047857}
+  .tl-time{font-size:11px;font-weight:700;color:#334155;text-align:right;
+           font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tl-row.off .tl-lab{color:#94a3b8}
+  .tl-row.off .tl-track{background:#f8fafc;border-style:dashed}
+  .tl-row.off .tl-time{color:#94a3b8;font-weight:500}
+
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;
+        background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;white-space:nowrap}
+  .espera{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+  .pill.hito.picking{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
+  .pill.hito.packing{background:#ecfeff;color:#0e7490;border-color:#a5f3fc}
+  .pill.hito.output{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="side">
+  <div>
+    <div class="side-title">Panel de Control</div>
+    <div class="side-sub">Fimas</div>
+  </div>
+  <nav class="side-nav">
+    <a href="/despacho" class="sn" id="navDespacho"><span class="ic">📦</span>Despacho</a>
+    <a href="/devoluciones" class="sn" id="navDevoluciones"><span class="ic">↩️</span>Devoluciones</a>
+    <a href="/" class="sn on" id="navKardex"><span class="ic">🗂️</span>Kardex</a>
+    <a href="/permisos" class="sn" id="navPermisos" style="display:none"><span class="ic">🔒</span>Permisos</a>
+    <a href="/configuracion" class="sn" id="navConfig" style="display:none"><span class="ic">⚙️</span>Configuraci&oacute;n</a>
+  </nav>
+  <div class="side-foot">
+    <div class="who">
+      <div class="avatar" id="avatar">K</div>
+      <div><b id="userName">&nbsp;</b><span id="userRole">&nbsp;</span></div>
+    </div>
+    <button id="btnSalir">Cerrar sesi&oacute;n</button>
+  </div>
+</aside>
+<div class="content">
+<header>
+  <div class="head-row">
+    <div>
+      <h1>Reporte Kardex de Inventario <span class="badge" id="src">ERP Odoo &bull; tiempo real</span></h1>
+      <p>Seleccione la compa&ntilde;&iacute;a y el &iacute;tem para generar el reporte. Descarga disponible en Excel y CSV.</p>
+    </div>
+  </div>
+</header>
+
+<div class="wrap" id="wrap">
+ <div id="vistaKardex">
+  <section class="card">
+    <h3>Par\u00e1metros del reporte</h3>
+    <div class="row">
+      <label>Compa\u00f1\u00eda / Empresa
+        <select id="selCompany"></select>
+      </label>
+      <label>Buscar \u00edtem (c\u00f3digo o nombre)
+        <div class="ac">
+          <input type="search" id="txtItem" placeholder="p.ej. PIN130 o barniz rojo" autocomplete="off" style="width:330px">
+          <div id="results"></div>
+        </div>
+      </label>
+      <button class="green" id="btnLoad" disabled>Generar Kardex</button>
+      <button class="ghost" id="btnXlsx" disabled>Descargar Excel</button>
+      <button class="ghost" id="btnCsv" disabled>Descargar CSV</button>
+      <span id="status"></span>
+    </div>
+    <div class="chosen" id="chosen">Seleccione un \u00edtem del buscador.</div>
+  </section>
+
+  <section class="kpis" id="kpis" style="display:none"></section>
+
+  <section class="card" id="filters" style="display:none">
+    <h3>Filtros del kardex</h3>
+    <div class="row">
+      <button class="ghost" id="btnRango">Consultar rango de fechas</button>
+      <span id="rangoInfo" class="chosen">Todas las fechas</span>
+      <span id="rangoBox" class="row" style="display:none">
+        <label>Desde<input type="date" id="fFrom"></label>
+        <label>Hasta<input type="date" id="fTo"></label>
+        <button id="btnTodas" type="button" class="ghost">Todas las fechas</button>
+      </span>
+      <label>Tipo de movimiento<select id="fType"><option value="">Todos</option></select></label>
+      <label>Buscar en documento / contraparte
+        <input type="search" id="fText" placeholder="p.ej. MASER/OUT o INTROMEX" size="32">
+      </label>
+      <button class="ghost" id="btnReset">Restablecer filtros</button>
+      <label class="sw" title="Muestra las transferencias internas en gris, sin afectar saldo ni valoraci&oacute;n">
+        <input type="checkbox" id="chkInt"><i></i><span>Mostrar transferencias internas</span>
+      </label>
+      <span id="count" class="chosen"></span>
+    </div>
+  </section>
+
+  <div id="tableHost"></div>
+
+  <section class="card notes" id="notesCard" style="display:none">
+    <h3>Notas t\u00e9cnicas</h3>
+    <ul id="notes"></ul>
+  </section>
+ </div>
+
+ </div>
+</div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmtQ = n => (Math.abs(n - Math.round(n)) < 0.005)
+  ? Math.round(n).toLocaleString("es-EC")
+  : Number(n).toLocaleString("es-EC", {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtM = n => "$" + Number(n).toLocaleString("es-EC", {minimumFractionDigits:2, maximumFractionDigits:2});
+const d2 = s => s.slice(0,10).split("-").reverse().join("/");
+const TAG = {"Ingreso (Importaci\u00f3n)":"in","Ingreso (Recepci\u00f3n)":"in","Devoluci\u00f3n de cliente":"adj",
+             "Venta (Despacho)":"out","Devoluci\u00f3n a proveedor":"adj","Ajuste de inventario":"adj"};
+
+let STATE = {company:null, product:null, data:null, rows:[], sort:{k:"fecha", dir:1}, showInternals:false};
+let USUARIO = null;
+
+async function api(path, params) {
+  const url = new URL(path, location.origin);
+  Object.entries(params || {}).forEach(([k,v]) => { if (v !== null && v !== undefined && v !== "") url.searchParams.set(k, v); });
+  const r = await fetch(url);
+  if (r.status === 401) { location.href = "/login"; throw new Error("sesion expirada"); }
+  const ct = r.headers.get("content-type") || "";
+  if (!ct.includes("json")) { if (!r.ok) throw new Error(await r.text()); return r.blob(); }
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.mensaje || j.error || "error");
+  return j;
+}
+
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+async function initKardex() {
+  const companies = await api("/api/companies");
+  $("#selCompany").innerHTML = companies.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+  const saved = JSON.parse(localStorage.getItem("kardexSel") || "null");
+  if (saved && companies.some(c => c.id === saved.company)) {
+    $("#selCompany").value = saved.company;
+    if (saved.product) { STATE.product = saved.product; $("#txtItem").value = saved.product.codigo; ready(); }
+  } else {
+    await pickCompany($("#selCompany").value);
+  }
+}
+
+async function init() {
+  const me = await api("/api/auth/me");
+  USUARIO = me.usuario;
+  $("#userName").textContent = USUARIO.nombre;
+  $("#userRole").textContent = `Odoo UID ${USUARIO.id}${USUARIO.login ? " \u00b7 " + USUARIO.login : ""}`;
+  $("#avatar").textContent = (USUARIO.nombre || "K").trim().charAt(0).toUpperCase();
+  const mods = USUARIO.modulos || [];
+  const conKardex = mods.includes("kardex"), conDespacho = mods.includes("despacho");
+  const conDevoluciones = mods.includes("devoluciones");
+  const ocultos = [];
+  if (!conKardex) ocultos.push("#navKardex");
+  if (!conDespacho) ocultos.push("#navDespacho");
+  if (!conDevoluciones) ocultos.push("#navDevoluciones");
+  if (USUARIO.rol !== "admin") ocultos.push("#navPermisos", "#navConfig");
+  ocultos.forEach(s => { const el = $(s); if (el) el.style.display = "none"; });
+  if (!conKardex && !conDespacho && !conDevoluciones) {
+    $("#wrap").innerHTML = `<div class="empty"><b>Lo siento, no tienes permiso para acceder
+      a ning\u00fan m&oacute;dulo.</b><br><small>Pide al administrador que te habilite un m&oacute;dulo desde el Panel de Permisos.</small></div>`;
+    return;
+  }
+  if (conKardex) await initKardex();
+}
+
+$("#btnSalir").addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  localStorage.removeItem("kardexSel");
+  location.href = "/login";
+});
+
+async function pickCompany(cid) {
+  STATE.company = Number(cid);
+  const items = await api("/api/products", {company_id: cid, q: "PIN130"});
+  if (items.length) selectItem(items[0]);
+}
+
+function selectItem(p) {
+  STATE.product = p;
+  localStorage.setItem("kardexSel", JSON.stringify({company: STATE.company, product: p}));
+  $("#chosen").innerHTML = `\u00edtem seleccionado: <b>${p.codigo}</b> \u2014 ${p.nombre}`;
+  $("#txtItem").value = p.codigo;
+  $("#results").style.display = "none";
+  ready();
+}
+
+function ready() { $("#btnLoad").disabled = false; load(); }
+
+async function load() {
+  if (!STATE.product) return;
+  $("#btnLoad").disabled = true;
+  $("#status").innerHTML = '<span class="spin"></span>Consultando movimientos en el ERP...';
+  $("#btnXlsx").disabled = $("#btnCsv").disabled = true;
+  try {
+    const d = await api("/api/kardex", {company_id: STATE.company, product_id: STATE.product.id});
+    STATE.data = d;
+    if (!d.ok) {
+      $("#kpis").style.display = "none"; $("#filters").style.display = "none"; $("#notesCard").style.display = "none";
+      $("#tableHost").innerHTML = `<div class="empty"><b>${d.sin_movimientos}</b><br>
+        <small>Movimientos cancelados detectados: ${d.cancelados} &middot; total hist\u00f3rico: ${d.total_moves}</small></div>`;
+      $("#status").textContent = "";
+      return;
+    }
+    document.querySelector("header h1").innerHTML =
+      `Reporte Kardex: ${d.producto.codigo} \u2014 ${d.producto.nombre} <span class="badge">${d.empresa.nombre}</span>`;
+    $("#rangoBox").style.display = "none";
+    $("#fFrom").value = ""; $("#fTo").value = "";
+    $("#btnRango").textContent = "Consultar rango de fechas";
+    $("#rangoInfo").textContent = "Todas las fechas";
+    refrescarTipos();
+    $("#kpis").style.display = "grid"; $("#filters").style.display = "block"; $("#notesCard").style.display = "block";
+    $("#notes").innerHTML = d.notas.map(n => `<li>${n}</li>`).join("");
+    STATE.sort = {k:"fecha", dir:1};
+    render();
+    $("#btnXlsx").disabled = $("#btnCsv").disabled = false;
+    $("#status").textContent = "";
+  } catch (e) {
+    $("#status").textContent = "Error: " + e.message;
+    $("#tableHost").innerHTML = `<div class="empty">No se pudo obtener el reporte.<br><small>${e.message}</small></div>`;
+  } finally {
+    $("#btnLoad").disabled = false;
+  }
+}
+
+function pasaFiltro(r, a, b, t, q) {
+  return (!a || r.date.slice(0,10) >= a) && (!b || r.date.slice(0,10) <= b) &&
+         (!t || r.tipo === t) && (!q || (r.doc + " " + r.origen + " " + r.tipo).toLowerCase().includes(q));
+}
+
+function normInternal(i) {
+  const donde = [i.ubicacion, i.origen].filter(Boolean).join(" \u2192 ");
+  return {date: i.date, tipo: "Transferencia interna", codTipo: i.tipo, doc: i.doc || "\u2014",
+          origen: donde + (i.cantidad ? ` (${fmtQ(i.cantidad)} u)` : ""),
+          entrada: 0, salida: 0, cost: 0, saldo: null, valor_total: null, interno: true};
+}
+
+function filtered() {
+  const d = STATE.data; if (!d) return [];
+  const a = $("#fFrom").value, b = $("#fTo").value, t = $("#fType").value;
+  const q = $("#fText").value.trim().toLowerCase();
+  const out = d.rows.filter(r => pasaFiltro(r, a, b, t, q));
+  if (STATE.showInternals) {
+    (d.internals || []).map(normInternal).filter(r => pasaFiltro(r, a, b, t, q)).forEach(r => out.push(r));
+  }
+  return out;
+}
+
+function refrescarTipos() {
+  const d = STATE.data; if (!d) return;
+  const sel = $("#fType"), actual = sel.value;
+  sel.innerHTML = `<option value="">Todos</option>` +
+    tiposDisponibles(d).map(t => `<option${t === actual ? " selected" : ""}>${t}</option>`).join("");
+  if (![...sel.options].some(o => o.value === actual)) sel.value = "";
+}
+
+function tiposDisponibles(d) {
+  const base = [...new Set(d.rows.map(r => r.tipo))];
+  if (STATE.showInternals) base.push("Transferencia interna");
+  return base.sort();
+}
+
+function render() {
+  const d = STATE.data, k = d.kpi;
+  const notaInt = STATE.showInternals
+    ? `${k.internos} transf. internas visibles en gris (${fmtQ(k.internos_qty)} u)`
+    : `${k.internos} transf. internas omitidas (${fmtQ(k.internos_qty)} u)`;
+  $("#kpis").innerHTML = [
+    ["Entradas totales", fmtQ(k.entradas) + " u", "ingresos, devoluciones y ajustes"],
+    ["Salidas totales", fmtQ(k.salidas) + " u", "despachos y devoluciones a proveedor"],
+    ["Saldo actual", fmtQ(k.saldo) + " u", d.empresa.nombre],
+    ["Valoraci\u00f3n del saldo", fmtM(k.valor), "saldo \u00d7 costo promedio"],
+    ["Costo promedio", k.costo_prom ? fmtM(k.costo_prom) : "n/a", d.producto.metodo],
+    ["Movimientos", fmtQ(k.movimientos), notaInt],
+  ].map(([t,v,s]) => `<div class="kpi"><span>${t}</span><strong>${v}</strong><small>${s}</small></div>`).join("");
+
+  let rows = filtered().slice();
+  const {k:key, dir} = STATE.sort;
+  const val = r => ({fecha:r.date, tipo:r.tipo, doc:r.doc, origen:r.origen, ent:r.entrada || 0,
+                     sal:r.salida || 0, cost:r.cost || 0, saldo:r.saldo, valor:r.valor_total})[key];
+  rows.sort((a,b) => { const x = val(a), y = val(b);
+    if (x === null || y === null) {                       // las internas siempre al final
+      if (x === y) return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+      return x === null ? 1 : -1;
+    }
+    return (typeof x === "number" ? x - y : String(x).localeCompare(String(y), "es")) * dir; });
+
+  const body = rows.map(r => r.interno ? `<tr class="int">
+      <td>${d2(r.date)}</td>
+      <td><span class="tag int" title="${r.codTipo || ""}">${r.tipo}</span></td>
+      <td class="doc">${r.doc}</td>
+      <td class="wrap">${r.origen}</td>
+      <td class="num">\u2013</td><td class="num">\u2013</td><td class="num">N/A</td>
+      <td class="num">\u2013</td><td class="num">\u2013</td></tr>`
+    : `<tr>
+      <td>${d2(r.date)}</td>
+      <td><span class="tag ${TAG[r.tipo]||"adj"}">${r.tipo}</span></td>
+      <td class="doc">${r.doc}</td>
+      <td class="wrap">${r.origen}</td>
+      <td class="num">${r.entrada ? fmtQ(r.entrada) : "\u2013"}</td>
+      <td class="num">${r.salida ? fmtQ(r.salida) : "\u2013"}</td>
+      <td class="num">${r.cost ? fmtM(r.cost) : "N/A"}</td>
+      <td class="num"><b>${fmtQ(r.saldo)}</b></td>
+      <td class="num">${fmtM(r.valor_total)}</td></tr>`).join("");
+  const krows = rows.filter(r => !r.interno);            // las internas no alteran totales
+  const last = krows[krows.length - 1];
+  const nInt = rows.length - krows.length;
+  const cols = ["Fecha","Tipo Mvto.","Num. Doc.","Origen / Destino","Entradas","Salidas","Costo Unit.","Saldo","Valor Total Saldo"];
+  const keys = ["fecha","tipo","doc","origen","ent","sal","cost","saldo","valor"];
+  const resumen = `${krows.length} movimientos` + (nInt ? ` + ${nInt} internas` : "");
+  $("#tableHost").innerHTML = `<div class="tablebox"><table>
+    <thead><tr>${cols.map((c,i) => `<th data-k="${keys[i]}">${c}${STATE.sort.k===keys[i]?(dir>0?" \u25b2":" \u25bc"):""}</th>`).join("")}</tr></thead>
+    <tbody>${body || `<tr><td colspan="9" style="text-align:center;padding:24px;color:#64748b">Sin resultados para los filtros aplicados.</td></tr>`}</tbody>
+    <tfoot><tr><td>TOTALES</td><td></td><td></td><td>${resumen} filtrados</td>
+      <td class="num">${fmtQ(krows.reduce((s,r)=>s+r.entrada,0))}</td>
+      <td class="num">${fmtQ(krows.reduce((s,r)=>s+r.salida,0))}</td>
+      <td></td>
+      <td class="num">${last?fmtQ(last.saldo):0}</td>
+      <td class="num">${last?fmtM(last.valor_total):fmtM(0)}</td></tr></tfoot></table></div>`;
+
+  $("#tableHost table").addEventListener("click", e => {
+    const th = e.target.closest("th"); if (!th) return;
+    const k2 = th.dataset.k;
+    STATE.sort = {k:k2, dir: STATE.sort.k === k2 ? -STATE.sort.dir : 1};
+    render();
+  });
+  $("#count").textContent = `${krows.length} de ${d.rows.length} movimientos` +
+    (nInt ? ` \u00b7 ${nInt} internas` : "");
+}
+
+function dl(url) {
+  const a = document.createElement("a");
+  a.href = url; document.body.appendChild(a); a.click(); a.remove();
+}
+const exportUrl = path => `${path}?company_id=${STATE.company}&product_id=${STATE.product.id}` +
+  `&desde=${$("#fFrom").value}&hasta=${$("#fTo").value}&tipo=${encodeURIComponent($("#fType").value)}` +
+  `&q=${encodeURIComponent($("#fText").value.trim())}&internas=${STATE.showInternals ? 1 : 0}`;
+
+let timer;
+$("#txtItem").addEventListener("input", () => {
+  clearTimeout(timer);
+  const cid = $("#selCompany").value;
+  timer = setTimeout(async () => {
+    const items = await api("/api/products", {company_id: cid, q: $("#txtItem").value});
+    const host = $("#results");
+    host.innerHTML = items.length
+      ? items.map(p => `<div data-id="${p.id}" data-codigo="${p.codigo.replace(/"/g,"")}" data-nombre="${p.nombre.replace(/"/g,"")}">
+          <b>${p.codigo}</b> &mdash; ${p.nombre}<small>${p.display}</small></div>`).join("")
+      : `<div style="color:#64748b">Sin resultados. Elija otro c\u00f3digo o nombre.</div>`;
+    host.style.display = "block";
+    host.querySelectorAll("div[data-id]").forEach(el => el.onclick = () =>
+      selectItem({id: Number(el.dataset.id), codigo: el.dataset.codigo, nombre: el.dataset.nombre}));
+  }, 220);
+});
+document.addEventListener("click", e => {
+  if (!e.target.closest(".ac")) $("#results").style.display = "none";
+});
+$("#selCompany").addEventListener("change", () => {
+  STATE.company = Number($("#selCompany").value);
+  STATE.product = null; $("#btnLoad").disabled = true;
+  $("#btnXlsx").disabled = $("#btnCsv").disabled = true;
+  pickCompany($("#selCompany").value);
+});
+$("#btnLoad").onclick = load;
+$("#btnXlsx").onclick = () => dl(exportUrl("/api/export"));
+$("#btnCsv").onclick = () => dl(exportUrl("/api/export/csv"));
+["fType","fText"].forEach(id => $("#"+id).addEventListener("input", render));
+["fFrom","fTo"].forEach(id => $("#"+id).addEventListener("input", () => { actualizarRango(); render(); }));
+$("#btnTodas").onclick = () => {
+  $("#rangoBox").style.display = "none";
+  $("#fFrom").value = ""; $("#fTo").value = "";
+  $("#btnRango").textContent = "Consultar rango de fechas";
+  actualizarRango(); render();
+};
+$("#btnRango").onclick = () => {
+  const box = $("#rangoBox");
+  if (box.style.display !== "none") {
+    box.style.display = "none";
+    $("#fFrom").value = ""; $("#fTo").value = "";
+    $("#btnRango").textContent = "Consultar rango de fechas";
+    actualizarRango(); render();
+  } else {
+    if (!$("#fFrom").value && STATE.data) $("#fFrom").value = STATE.data.desde;
+    if (!$("#fTo").value && STATE.data) $("#fTo").value = STATE.data.hasta;
+    box.style.display = "flex";
+    $("#btnRango").textContent = "Ocultar rango (volver a todas)";
+    $("#fFrom").focus();
+    actualizarRango();
+  }
+};
+function actualizarRango() {
+  const a = $("#fFrom").value, b = $("#fTo").value;
+  $("#rangoInfo").textContent = (!a && !b) ? "Todas las fechas"
+    : `${a ? d2(a) : "\u2013"} \u2013 ${b ? d2(b) : "\u2013"}`;
+}
+$("#chkInt").addEventListener("change", e => {
+  STATE.showInternals = e.target.checked;
+  refrescarTipos();
+  render();
+});
+$("#btnReset").onclick = () => {
+  $("#rangoBox").style.display = "none";
+  $("#fFrom").value = ""; $("#fTo").value = "";
+  $("#btnRango").textContent = "Consultar rango de fechas";
+  $("#fType").value = ""; $("#fText").value = "";
+  actualizarRango(); render();
+};
+init().catch(e => $("#status").textContent = "Error: " + e.message);
+</script>
+</body>
+</html>

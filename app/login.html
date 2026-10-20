@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0b1220" />
+<title>Kardex Fimas - Ingreso al sistema</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b1220'/%3E%3Cpath d='M8 22V10h4l4 7 4-7h4v12h-3v-7l-3.2 6h-3.6L11 15v7z' fill='%2338bdf8'/%3E%3C/svg%3E" />
+<style>
+  :root{
+    --navy:#0b1220; --navy-2:#16233c; --brand:#1d4ed8; --cyan:#38bdf8;
+    --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --ok:#047857; --err:#b91c1c;
+    --radius:14px; --shadow:0 18px 45px rgba(15,23,42,.16);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+       background:var(--navy);color:var(--ink)}
+  .layout{min-height:100vh;display:grid;grid-template-columns:1.05fr .95fr}
+
+  /* ---------- panel de marca ---------- */
+  .brand{position:relative;overflow:hidden;padding:52px 56px;color:#e6eefb;
+         background:linear-gradient(150deg,#0b1220 0%,#152743 55%,#123a63 100%);
+         display:flex;flex-direction:column;justify-content:space-between}
+  .brand::before{content:"";position:absolute;width:620px;height:620px;right:-230px;top:-190px;
+    background:radial-gradient(circle at 30% 30%,rgba(56,189,248,.34),transparent 62%)}
+  .brand::after{content:"";position:absolute;width:520px;height:520px;left:-190px;bottom:-210px;
+    background:radial-gradient(circle at 60% 40%,rgba(29,78,216,.42),transparent 62%)}
+  .brand > *{position:relative;z-index:1}
+  .logo{display:flex;align-items:center;gap:13px}
+  .logo svg{width:46px;height:46px;flex:none;border-radius:12px;
+            background:linear-gradient(135deg,#1d4ed8,#38bdf8);display:grid;place-items:center;
+            box-shadow:0 10px 26px rgba(29,78,216,.42)}
+  .logo strong{display:block;font-size:19px;letter-spacing:3.5px;color:#fff}
+  .logo span{display:block;font-size:10.5px;letter-spacing:2.6px;color:#7dd3fc;text-transform:uppercase}
+  .pitch h1{font-size:40px;line-height:1.1;margin:0 0 16px;color:#fff;font-weight:700;letter-spacing:-.5px}
+  .pitch p{margin:0;max-width:44ch;color:#a9c0dd;font-size:15px;line-height:1.65}
+  .feats{display:flex;gap:26px;margin-top:34px;flex-wrap:wrap}
+  .feat{flex:1 1 150px;min-width:150px}
+  .feat b{display:block;font-size:26px;color:#38bdf8;letter-spacing:-.4px}
+  .feat span{font-size:12px;color:#8aa5c8;text-transform:uppercase;letter-spacing:.8px}
+  .chart{margin-top:38px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+         border-radius:var(--radius);padding:16px 18px;backdrop-filter:blur(6px)}
+  .chart-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .chart-head b{font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:#cfe0f5}
+  .chart-head i{font-style:normal;font-size:11px;color:#7dd3fc}
+  .bars{display:flex;align-items:flex-end;gap:9px;height:74px}
+  .bars i{flex:1;border-radius:5px 5px 2px 2px;background:linear-gradient(180deg,#38bdf8,#1d4ed8);
+          opacity:.85;transform-origin:bottom;animation:grow .9s cubic-bezier(.22,1,.36,1) both}
+  @keyframes grow{from{transform:scaleY(.05);opacity:0}to{transform:scaleY(1);opacity:.85}}
+  .foot{font-size:12px;color:#7f96b5}
+
+  /* ---------- panel de formulario ---------- */
+  .panel{display:grid;place-items:center;padding:40px 32px;background:#f4f7fb}
+  .card{width:100%;max-width:436px;background:#fff;border:1px solid var(--line);
+        border-radius:18px;box-shadow:var(--shadow);padding:34px 34px 30px;position:relative;overflow:hidden}
+  .card h2{margin:0 0 6px;font-size:23px;letter-spacing:-.3px}
+  .card .sub{margin:0 0 24px;color:var(--muted);font-size:13.5px}
+  .mobile-brand{display:none;align-items:center;gap:11px;margin-bottom:22px}
+  .mobile-brand svg{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#1d4ed8,#38bdf8);
+                    display:grid;place-items:center}
+  .mobile-brand b{letter-spacing:2.6px;font-size:15px}
+
+  .progress{position:absolute;top:0;left:0;right:0;height:3px;background:transparent;overflow:hidden}
+  .progress i{position:absolute;inset:0;width:38%;background:linear-gradient(90deg,#1d4ed8,#38bdf8);
+              transform:translateX(-100%);animation:slide 1.1s cubic-bezier(.4,0,.2,1) infinite}
+  @keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(360%)}}
+  .progress.determinate i{animation:none;transition:width .25s ease;width:0}
+  .pct{font-size:11px;color:var(--cyan);letter-spacing:.6px}
+
+  label{display:block;font-size:11.5px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;
+        color:#334155;margin:0 0 7px}
+  .field{margin-bottom:16px;position:relative}
+  .field .ctrl{position:relative;display:flex;align-items:center}
+  .field svg.icon{position:absolute;left:13px;width:17px;height:17px;color:#94a3b8;pointer-events:none}
+  input[type=text],input[type=email],input[type=password]{width:100%;padding:13px 14px;font-size:14.5px;
+        border:1px solid var(--line);border-radius:11px;background:#fbfcfe;color:var(--ink);
+        transition:border-color .18s,box-shadow .18s,background .18s;font-family:inherit}
+  input.has-icon{padding-left:40px}
+  input.has-eye{padding-right:46px}
+  input:focus{outline:none;border-color:var(--brand);background:#fff;
+              box-shadow:0 0 0 4px rgba(29,78,216,.12)}
+  input:disabled{background:#f1f5f9;color:var(--muted)}
+  .eye{position:absolute;right:6px;width:34px;height:34px;border:0;background:transparent;border-radius:9px;
+       cursor:pointer;display:grid;place-items:center;color:#64748b}
+  .eye:hover{background:#eef2f7}
+  .eye svg{width:18px;height:18px}
+  .hint{margin-top:6px;font-size:11.5px;color:var(--muted)}
+  .hint.err{color:var(--err)}
+  button.primary{width:100%;margin-top:6px;padding:14px;font-size:15px;font-weight:600;color:#fff;
+    border:0;border-radius:11px;cursor:pointer;font-family:inherit;position:relative;
+    background:linear-gradient(135deg,#1d4ed8,#2563eb);box-shadow:0 12px 26px rgba(29,78,216,.32);
+    transition:transform .16s,box-shadow .16s,filter .16s;display:flex;align-items:center;
+    justify-content:center;gap:10px}
+  button.primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 16px 32px rgba(29,78,216,.4)}
+  button.primary:disabled{cursor:not-allowed;filter:saturate(.75) brightness(.94)}
+  button.primary .mini{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.35);
+    border-top-color:#fff;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .btn-ghost{width:100%;margin-top:10px;padding:12px;font-size:14px;font-weight:600;color:var(--brand);
+    background:#fff;border:1px solid #cbd5f5;border-radius:11px;cursor:pointer;font-family:inherit}
+  .btn-ghost:hover{background:#f2f6ff}
+  .meta{margin-top:20px;padding-top:16px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted);
+        display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .pill{font-size:11px;padding:3px 9px;border-radius:999px;background:#eff6ff;color:#1d4ed8;
+        border:1px solid #dbeafe;font-weight:600}
+
+  /* ---------- modal ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(11,18,32,.62);backdrop-filter:blur(3px);
+           display:none;place-items:center;padding:20px;z-index:60}
+  .overlay.on{display:grid;animation:fade .18s ease both}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .modal{width:100%;max-width:432px;background:#fff;border-radius:16px;box-shadow:0 30px 70px rgba(2,6,23,.4);
+         padding:28px 28px 24px;text-align:center;animation:pop .22s cubic-bezier(.22,1,.36,1) both}
+  @keyframes pop{from{transform:translateY(14px) scale(.97);opacity:0}to{transform:none;opacity:1}}
+  .modal .ico{width:56px;height:56px;margin:0 auto 16px;border-radius:50%;display:grid;place-items:center;
+              background:#fef2f2;border:2px solid #fecaca;color:var(--err)}
+  .modal .ico svg{width:28px;height:28px}
+  .modal h3{margin:0 0 9px;font-size:19px;color:var(--ink)}
+  .modal p{margin:0 0 22px;color:#475569;font-size:14px;line-height:1.6}
+  .modal .acts{display:flex;gap:10px}
+  .modal .acts button{flex:1;padding:12px;font-weight:600;border-radius:11px;cursor:pointer;
+        font-family:inherit;font-size:14.5px;border:0;background:var(--brand);color:#fff}
+  .modal .acts button:hover{filter:brightness(1.07)}
+  .modal.ok .ico{background:#ecfdf5;border-color:#a7f3d0;color:var(--ok)}
+  .modal.ok .acts button{background:var(--ok)}
+
+  /* ---------- responsive ---------- */
+  @media (max-width:1023px){
+    .layout{grid-template-columns:1fr}
+    .brand{padding:34px 30px}
+    .pitch h1{font-size:31px}
+    .chart{display:none}
+    .feats{margin-top:22px}
+    .panel{padding:30px 22px 44px}
+  }
+  @media (max-width:767px){
+    .brand{padding:26px 22px 30px}
+    .pitch p{font-size:13.5px}
+    .feats{display:none}
+    .mobile-brand{display:flex}
+    .card{padding:26px 20px 24px;border-radius:15px}
+    .modal{padding:24px 20px 20px}
+    button.primary{min-height:48px}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="layout">
+  <section class="brand">
+    <div class="logo">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 22V10h4l4 7 4-7h4v12h-3v-7l-3.2 6h-3.6L11 15v7z" fill="#fff"/></svg>
+      <div><strong>KARDEX FIMAS</strong><span>Control de inventario</span></div>
+    </div>
+
+    <div class="pitch">
+      <h1>Informaci&oacute;n de inventario precisa, al d&iacute;a que la necesitas.</h1>
+      <p>Kardex por art&iacute;culo y compa&ntilde;&iacute;a, valuado con el m&eacute;todo de inventario del ERP,
+         listo para exportar a Excel y comparar entre empresas.</p>
+      <div class="feats">
+        <div class="feat"><b>125</b><span>Movimientos por art&iacute;culo</span></div>
+        <div class="feat"><b>2</b><span>Compa&ntilde;&iacute;as</span></div>
+        <div class="feat"><b>Excel</b><span>Exportaci&oacute;n ordenada</span></div>
+      </div>
+      <div class="chart" aria-hidden="true">
+        <div class="chart-head"><b>Entradas vs. salidas</b><i> Kardex Fimas</i></div>
+        <div class="bars" id="bars"></div>
+      </div>
+    </div>
+
+    <p class="foot">&copy; <span id="year"></span> Kardex Fimas &middot; Sistema de control de inventario</p>
+  </section>
+
+  <section class="panel">
+    <div class="card">
+      <div class="progress" id="bar"><i></i></div>
+
+      <div class="mobile-brand">
+        <svg viewBox="0 0 32 32"><path d="M8 22V10h4l4 7 4-7h4v12h-3v-7l-3.2 6h-3.6L11 15v7z" fill="#fff"/></svg>
+        <b>KARDEX FIMAS</b>
+      </div>
+
+      <div id="viewLogin">
+        <h2 id="title">Ingreso al sistema</h2>
+        <p class="sub" id="subtitle">El acceso al Kardex est&aacute; unificado con tu cuenta de Odoo.
+           Ingresa con tus credenciales habituales de Odoo.</p>
+        <form id="formLogin" novalidate>
+          <div class="field">
+            <label for="email">Usuario Odoo (correo o login)</label>
+            <div class="ctrl">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><path d="M3 6.5l9 6 9-6"/></svg>
+              <input id="email" class="has-icon" type="email" inputmode="email" autocomplete="username"
+                     placeholder="usuario@empresa.com" required />
+            </div>
+          </div>
+          <div class="field">
+            <label for="password">Contrase&ntilde;a Odoo</label>
+            <div class="ctrl">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/></svg>
+              <input id="password" class="has-icon has-eye" type="password" autocomplete="current-password"
+                     placeholder="Su contraseña de Odoo" required />
+              <button class="eye" type="button" id="eye" aria-label="Mostrar contraseña">
+                <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="hint" id="hint">&nbsp;</div>
+          <button class="primary" id="btnIngresar" type="submit">
+            <span id="btnTxt">Ingresar</span>
+          </button>
+        </form>
+        <div class="meta">
+          <span>No es necesario crear un usuario nuevo</span>
+          <span class="pill" id="pill">Acceso unificado con Odoo</span>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal" id="modal">
+    <div class="ico" id="modalIco">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 8v5"/><circle cx="12" cy="16.6" r=".9" fill="currentColor"/>
+        <path d="M10.3 3.9L2.6 17.2A2 2 0 0 0 4.3 20.2h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+    </div>
+    <h3 id="modalTitle">Error de ingreso</h3>
+    <p id="modalMsg"></p>
+    <div class="acts"><button id="modalBtn" type="button">Aceptar</button></div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+document.getElementById("year").textContent = new Date().getFullYear();
+document.getElementById("bars").innerHTML = [34,58,42,72,50,86,64,92,58,76,44,68]
+  .map((h,i) => `<i style="height:${h}%;animation-delay:${i*60}ms"></i>`).join("");
+
+const MSG_ERROR = "El usuario o la contrase\u00f1a de Odoo ingresados no son correctos. Verifique sus credenciales e intente nuevamente.";
+let ultimoFoco = null;
+
+function abrirModal(titulo, mensaje, textoBoton = "Aceptar", ok = false) {
+  ultimoFoco = document.activeElement;
+  $("#modalTitle").textContent = titulo;
+  $("#modalMsg").textContent = mensaje;
+  $("#modalBtn").textContent = textoBoton;
+  $("#modal").classList.toggle("ok", ok);
+  $("#modalIco").innerHTML = ok
+    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6.5L9.5 17 4 11.5"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v5"/><circle cx="12" cy="16.6" r=".9" fill="currentColor"/><path d="M10.3 3.9L2.6 17.2A2 2 0 0 0 4.3 20.2h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>`;
+  $("#overlay").classList.add("on");
+  setTimeout(() => $("#modalBtn").focus(), 40);
+}
+function cerrarModal() {
+  $("#overlay").classList.remove("on");
+  if (ultimoFoco && ultimoFoco.focus) ultimoFoco.focus();
+}
+$("#modalBtn").addEventListener("click", cerrarModal);
+$("#overlay").addEventListener("click", e => { if (e.target.id === "overlay") cerrarModal(); });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && $("#overlay").classList.contains("on")) cerrarModal();
+  if (e.key === "Tab" && $("#overlay").classList.contains("on")) { e.preventDefault(); $("#modalBtn").focus(); }
+});
+
+document.querySelectorAll(".eye").forEach(btn => btn.addEventListener("click", () => {
+  const input = btn.dataset.eye ? document.getElementById(btn.dataset.eye) : $("#password");
+  const ver = input.type === "password";
+  input.type = ver ? "text" : "password";
+  btn.setAttribute("aria-label", ver ? "Ocultar contraseña" : "Mostrar contraseña");
+}));
+
+function loading(on, texto) {
+  $("#bar").classList.toggle("determinate", on);
+  $("#bar").querySelector("i").style.width = on ? "35%" : "";
+  $("#btnIngresar").disabled = on;
+  $("#email").disabled = on; $("#password").disabled = on;
+  $("#btnTxt").innerHTML = on ? `<span class="mini"></span> ${texto || "Validando credenciales en Odoo..."}` : "Ingresar";
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(body || {}) });
+  let j = {};
+  try { j = await r.json(); } catch (_) {}
+  return { status: r.status, data: j };
+}
+
+$("#formLogin").addEventListener("submit", async e => {
+  e.preventDefault();
+  const email = $("#email").value.trim(), pass = $("#password").value;
+  $("#hint").textContent = " ";
+  if (!email || !pass) {
+    $("#hint").textContent = "Complete el usuario Odoo y la contrase\u00f1a.";
+    $("#hint").className = "hint err";
+    (!email ? $("#email") : $("#password")).focus();
+    return;
+  }
+  loading(true);
+  let bar = 12, tick = setInterval(() => { bar = Math.min(bar + Math.random() * 16, 88);
+    $("#bar").querySelector("i").style.width = bar + "%"; }, 140);
+  try {
+    const { status, data } = await post("/api/auth/login", { email, password: pass });
+    await sleep(Math.max(0, 1300 - (Date.now() - t0)));
+    clearInterval(tick);
+    if (status === 200 && data.ok) {
+      $("#bar").querySelector("i").style.width = "100%";
+      await sleep(260);
+      loading(true, "Acceso concedido");
+      location.href = "/";
+      return;
+    }
+    loading(false);
+    $("#password").value = "";
+    $("#password").focus();
+    abrirModal("Error de ingreso", data.mensaje || MSG_ERROR);
+  } catch (_) {
+    clearInterval(tick); loading(false);
+    abrirModal("Error de ingreso", "No fue posible conectar con el servidor. Intente nuevamente.");
+  }
+});
+
+const t0 = Date.now();
+
+(async function init() {
+  try {
+    const r = await fetch("/api/auth/estado"); const est = await r.json();
+    if (est.autenticado) { location.href = "/"; return; }
+  } catch (_) {
+    abrirModal("Sin conexión", "El servidor de Kardex Fimas no responde. Verifique que esté iniciado.");
+  }
+})();
+</script>
+</body>
+</html>

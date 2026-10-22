@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Kardex Fimas - Devoluciones pendientes</title>
+<title>Fimas - Devoluciones pendientes de compras puntuales (FINPAC)</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b1220'/%3E%3Cpath d='M8 22V10h4l4 7 4-7h4v12h-3v-7l-3.2 6h-3.6L11 15v7z' fill='%2338bdf8'/%3E%3C/svg%3E" />
 <style>
   :root{--line:#e2e8f0;--muted:#64748b;--ink:#0f172a;--brand:#1d4ed8;--ok:#047857;--err:#b91c1c}
@@ -34,7 +34,7 @@
   .side-foot button:hover{background:rgba(255,255,255,.18)}
   .content{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow-y:auto}
   .board{flex:0 0 auto;display:flex;flex-direction:column;gap:14px;
-         width:100%;max-width:1600px;margin:0 auto;padding:10px 14px 28px}
+         width:100%;max-width:1700px;margin:0 auto;padding:10px 14px 28px}
   .bar{flex:none;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end;justify-content:space-between;
        background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
   .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
@@ -70,11 +70,14 @@
   td.num{text-align:right;font-variant-numeric:tabular-nums}
   td code{font-family:Consolas,Monaco,monospace;font-size:11.5px;background:#f1f5f9;
           border:1px solid var(--line);border-radius:5px;padding:2px 6px}
-  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;
-        background:#fffbeb;color:#b45309;border:1px solid #fde68a;white-space:nowrap}
-  .pill.ok{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
-  .pill.par{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
-  .revisar{color:#b45309;font-weight:700}
+  .pend{color:#b45309;font-weight:700}
+  .tag{display:inline-block;margin-left:5px;font-size:9px;font-weight:800;letter-spacing:.4px;
+       padding:1px 5px;border-radius:5px;vertical-align:middle}
+  .tag.doc{background:#e0f2fe;color:#075985;border:1px solid #bae6fd}
+  .tag.traz{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
+  tr.warn td{background:#fff7ed}
+  tr.warn:hover td{background:#ffedd5}
+  .warnmark{color:#b45309;font-weight:800;margin-left:5px}
   .empty{padding:30px;text-align:center;color:var(--muted)}
   .denied{max-width:560px;margin:60px auto;background:#fff;border:1px solid var(--line);border-radius:14px;
           padding:34px;text-align:center}
@@ -85,7 +88,7 @@
   @keyframes sp{to{transform:rotate(360deg)}}
   .overlay{position:fixed;inset:0;background:rgba(11,18,32,.62);display:none;place-items:center;padding:20px;z-index:80}
   .overlay.on{display:grid}
-  .modal{width:100%;max-width:860px;max-height:90vh;overflow:auto;background:#fff;border-radius:16px;
+  .modal{width:100%;max-width:900px;max-height:90vh;overflow:auto;background:#fff;border-radius:16px;
          box-shadow:0 30px 70px rgba(2,6,23,.4)}
   .mhead{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:18px 22px;
          border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:2}
@@ -97,13 +100,16 @@
   .mini th{background:#f1f5f9;color:#334155;padding:7px 9px;text-align:left;font-size:10px;
            text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--line)}
   .mini td{padding:7px 9px;border-top:1px solid #eef2f7;font-variant-numeric:tabular-nums}
-  .mini tr.dev td{background:#eff6ff}
-  .mini tr.sal td{background:#fef2f2}
-  .warnbox{padding:11px 13px;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;
-           font-size:12.5px;color:#92400e;line-height:1.5;margin-bottom:12px}
   .resume{display:flex;flex-wrap:wrap;gap:8px 20px;padding:11px 13px;margin-bottom:12px;
-          background:#f8fafc;border:1px solid var(--line);border-radius:9px;font-size:12.5px;color:#334155}
+           background:#f8fafc;border:1px solid var(--line);border-radius:9px;font-size:12.5px;color:#334155}
   .resume b{color:var(--brand)}
+  .vinculo{border:1px solid;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:12.5px}
+  .vinculo .vtit{font-weight:700;margin-bottom:4px}
+  .vinculo .vtex{color:#334155;line-height:1.55}
+  .vinculo.doc{background:#f0f9ff;border-color:#bae6fd}
+  .vinculo.doc .vtit{color:#075985}
+  .vinculo.traz{background:#fffbeb;border-color:#fde68a}
+  .vinculo.traz .vtit{color:#92400e}
   @media(max-width:900px){
     .shell{flex-direction:column;height:auto;overflow:visible}
     .side{width:100%} .side-nav{flex-direction:row;flex-wrap:wrap}
@@ -119,9 +125,9 @@
     <div class="side-sub">Fimas</div>
   </div>
   <nav class="side-nav">
+    <a href="/" class="sn" id="navKardex"><span class="ic">🗂️</span>Kardex</a>
     <a href="/despacho" class="sn" id="navDespacho"><span class="ic">📦</span>Despacho</a>
     <a href="/devoluciones" class="sn on" id="navDevoluciones"><span class="ic">↩️</span>Devoluciones pendientes</a>
-    <a href="/" class="sn" id="navKardex"><span class="ic">🗂️</span>Kardex</a>
     <a href="/permisos" class="sn" id="navPermisos"><span class="ic">🔒</span>Permisos</a>
     <a href="/configuracion" class="sn" id="navConfig"><span class="ic">⚙️</span>Configuraci&oacute;n</a>
   </nav>
@@ -137,11 +143,10 @@
 <main class="board" id="board">
 
   <section class="bar">
-    <div class="count">Devoluciones encontradas: <b id="total">0</b></div>
+    <div class="count">Devoluciones pendientes: <b id="total">0</b></div>
     <div class="filters">
       <label>Fecha desde<input type="date" id="fDesde"></label>
       <label>Fecha hasta<input type="date" id="fHasta"></label>
-      <label>Vendedor<select id="fVendedor"><option value="">Todos</option></select></label>
       <button class="green" id="btnGen">Generar reporte</button>
       <button type="button" class="xls-btn" id="btnXlsx" disabled>&#128202; Exportar Excel</button>
       <span class="status" id="status"></span>
@@ -150,11 +155,18 @@
 
   <section class="block">
     <div class="tbl-head">
-      <h2>Devoluciones pendientes de compras locales &mdash; FINPAC</h2>
-      <span class="hint">Compras locales/puntuales devueltas por clientes con unidades a&uacute;n pendientes de salida. Rastreo cronol&oacute;gico de los movimientos posteriores. Las compras de importaci&oacute;n se excluyen.</span>
+      <h2>Devoluciones pendientes de compras puntuales &mdash; FINPAC</h2>
+      <span class="hint">Unidades devueltas por clientes de FINPAC, procedentes de compras puntuales/locales,
+      que siguen en el inventario sin venderse. Solo FINPAC: las compras internas con MASERVEN no se reportan.
+      La cantidad pendiente se obtiene con trazabilidad
+      cronol&oacute;gica FIFO sobre los movimientos reales: si otro vendedor vendi&oacute; esas unidades,
+      la pendiente baja; las compras posteriores del mismo c&oacute;digo no se atribuyen a la devoluci&oacute;n.
+      <br><b>DOC</b> = v&iacute;nculo documental confirmado (la orden de venta registra la OC de compra puntual).
+      <b>TRAZ</b> = v&iacute;nculo deducido por trazabilidad FIFO de capas (sin v&iacute;nculo documental).
+      Clic en una fila para ver el detalle.</span>
     </div>
     <div class="tbl-scroll" id="tableHost">
-      <div class="empty">Pulse <b>Generar reporte</b> para listar las devoluciones.</div>
+      <div class="empty">Pulse <b>Generar reporte</b> para listar las devoluciones pendientes.</div>
     </div>
   </section>
 
@@ -186,7 +198,7 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = n => (n == null ? "\u2014" : Number(n).toLocaleString("es-EC",
   { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-let USUARIO = null, ITEMS = [], VENDEDOR_LISTO = false;
+let USUARIO = null, ITEMS = [];
 
 function modalError(msg, titulo = "No se pudo completar") {
   $("#eTitle").textContent = titulo;
@@ -214,6 +226,7 @@ async function init() {
   const mods = USUARIO.modulos || [];
   $("#navKardex").style.display = mods.includes("kardex") ? "" : "none";
   $("#navDespacho").style.display = mods.includes("despacho") ? "" : "none";
+  $("#navDevoluciones").style.display = mods.includes("devoluciones") ? "" : "none";
   const admin = USUARIO.rol === "admin";
   $("#navPermisos").style.display = admin ? "" : "none";
   $("#navConfig").style.display = admin ? "" : "none";
@@ -229,42 +242,27 @@ async function init() {
   const iso = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   $("#fHasta").value = iso(hoy);
   $("#fDesde").value = iso(new Date(hoy.getFullYear(), hoy.getMonth() - 1, hoy.getDate()));
-  await generar();
 }
 
 function params() {
-  return new URLSearchParams({
-    desde: $("#fDesde").value, hasta: $("#fHasta").value, vendedor: $("#fVendedor").value });
-}
-
-function cargarVendedores(lista) {
-  if (VENDEDOR_LISTO || !lista || !lista.length) return;
-  const sel = $("#fVendedor");
-  const valor = sel.value;
-  for (const v of lista) {
-    const o = document.createElement("option");
-    o.value = v; o.textContent = v;
-    sel.appendChild(o);
-  }
-  sel.value = valor;
-  VENDEDOR_LISTO = true;
+  return new URLSearchParams({ desde: $("#fDesde").value, hasta: $("#fHasta").value });
 }
 
 async function generar() {
   const btn = $("#btnGen");
   btn.disabled = true;
-  $("#status").innerHTML = '<span class="spin"></span>Consultando el ERP...';
+  $("#btnXlsx").disabled = true;
+  $("#status").innerHTML = '<span class="spin"></span>Consultando el ERP y trazando los movimientos... puede tardar un momento.';
   try {
     const d = await pedir("/api/devoluciones?" + params().toString());
     render(d);
-    $("#status").textContent = "";
+    $("#status").textContent = d.generado ? `Actualizado: ${d.generado}` : "";
   } catch (err) {
     $("#status").textContent = "";
     if (err.status === 403) {
       ITEMS = [];
       $("#total").textContent = "0";
       $("#tableHost").innerHTML = `<div class="denied"><h3>Acceso denegado</h3><p>${esc(err.message)}</p></div>`;
-      $("#btnXlsx").disabled = true;
     } else {
       modalError(err.message);
     }
@@ -274,7 +272,6 @@ async function generar() {
 }
 
 function render(d) {
-  cargarVendedores(d.vendedores);
   ITEMS = d.items || [];
   $("#total").textContent = d.total || 0;
   if (!ITEMS.length) {
@@ -284,21 +281,22 @@ function render(d) {
   }
   $("#btnXlsx").disabled = false;
   const body = ITEMS.map((it, i) => {
-    const est = it.estado || "";
-    const cls = est === "PARCIALMENTE VENDIDO" ? "pill par" : "pill ok";
-    const estTxt = it.cantidad_estimada
-      ? `<span class="${cls}" title="${esc(it.aviso || "")}">${esc(est)}&nbsp;*</span>`
-      : `<span class="${cls}">${esc(est)}</span>`;
-    return `<tr data-i="${i}" title="Clic para ver movimientos">
-      <td>${esc(it.contacto)}</td>
+    const traz = it.vinculo_tipo === "TRAZ" || it.vinculo === "trazabilidad";
+    const tag = traz
+      ? '<span class="tag traz" title="V&iacute;nculo DEDUCIDO por trazabilidad FIFO: la OC se dedujo de la capa de stock que surtio la entrega al cliente que devuelve. No hay vinculo documental en la orden de venta">TRAZ</span>'
+      : '<span class="tag doc" title="V&iacute;nculo DOCUMENTAL confirmado: la orden de venta original registra esta OC de compra puntual de FINPAC">DOC</span>';
+    const aviso = it.aviso
+      ? `<span class="warnmark" title="${esc(it.aviso)}">&#9888;</span>` : "";
+    const tt = it.aviso ? esc(it.aviso) : "Clic para ver los movimientos que sustentan el saldo";
+    return `<tr data-i="${i}" class="${it.aviso ? "warn" : ""}" title="${tt}">
+      <td>${esc(it.cliente)}</td>
       <td>${esc(it.orden_venta)}</td>
-      <td><b>${esc(it.codigo)}</b></td>
+      <td><b>${esc(it.codigo)}</b>${aviso}</td>
       <td>${esc(it.descripcion)}</td>
       <td class="num">${fmt(it.cantidad_devuelta)}</td>
-      <td class="num">${fmt(it.cantidad_vendida_despues)}</td>
-      <td class="num">${fmt(it.cantidad_pendiente)}</td>
-      <td class="c">${estTxt}</td>
-      <td><code>${esc(it.orden_compra)}</code></td>
+      <td class="num pend">${fmt(it.cantidad_pendiente)}</td>
+      <td class="num">${fmt(it.stock_actual)}</td>
+      <td><code>${esc(it.orden_compra)}</code>${tag}</td>
       <td>${esc(it.proveedor)}</td>
       <td>${esc(it.fecha_oc)}</td>
       <td class="num">${fmt(it.costo_unitario)}</td>
@@ -307,11 +305,10 @@ function render(d) {
   }).join("");
   $("#tableHost").innerHTML = `<table>
     <thead><tr>
-      <th>CONTACTO</th><th>ORDEN DE VENTA</th><th>C&Oacute;DIGO</th><th>DESCRIPCI&Oacute;N</th>
-      <th class="c">CANT. DEVUELTA</th><th class="c">CANT. VENDIDA DESPU&Eacute;S</th>
-      <th class="c">CANT. PENDIENTE</th><th class="c">ESTADO</th>
-      <th>ORDEN DE COMPRA</th><th>PROVEEDOR</th>
-      <th>FECHA DE O/C</th><th class="c">COSTO UNIT.</th><th>VENDEDOR</th>
+      <th>CLIENTE</th><th>ORDEN DE VENTA ORIGINAL</th><th>C&Oacute;DIGO</th><th>DESCRIPCI&Oacute;N</th>
+      <th class="c">CANTIDAD DEVUELTA</th><th class="c">CANTIDAD PENDIENTE</th><th class="c">STOCK ACTUAL</th>
+      <th>ORDEN DE COMPRA</th><th>PROVEEDOR</th><th>FECHA DE O/C</th>
+      <th class="c">COSTO UNITARIO</th><th>VENDEDOR</th>
     </tr></thead>
     <tbody>${body}</tbody>
   </table>`;
@@ -324,7 +321,7 @@ $("#tableHost").addEventListener("click", e => {
 
 async function abrirDetalle(it) {
   $("#dTitle").textContent = `${it.codigo} \u2014 ${it.orden_venta}`;
-  $("#dSub").textContent = `${it.contacto} \u00b7 devoluci\u00f3n DEVCL \u00b7 OC ${it.orden_compra}`;
+  $("#dSub").textContent = `${it.cliente} \u00b7 devoluci\u00f3n del ${it.fecha_devolucion || ""} \u00b7 OC ${it.orden_compra}`;
   $("#dBody").innerHTML = '<div class="empty"><span class="spin"></span> Cargando movimientos...</div>';
   $("#ovDet").classList.add("on");
   let det;
@@ -334,30 +331,34 @@ async function abrirDetalle(it) {
     $("#dBody").innerHTML = `<div class="empty"><b>${esc(err.message)}</b></div>`;
     return;
   }
-  const filas = (det.movimientos || []).map(m => {
-    const clase = m.es_devolucion ? "dev" : (m.es_salida ? "sal" : "");
-    return `<tr class="${clase}">
-      <td>${esc(m.fecha)}</td><td><code>${esc(m.documento || m.nombre)}</code></td>
-      <td>${esc(m.tipo)}</td><td>${esc(m.clase_etiqueta || m.clase || "")}</td>
-      <td class="num">${fmt(m.cantidad)}</td></tr>`;
-  }).join("");
-  const aviso = it.cantidad_estimada
-    ? `<div class="warnbox"><b>Cantidad estimada.</b> ${esc(it.aviso || "")}</div>` : "";
+  const filas = (det.movimientos || []).map(m => `<tr>
+      <td>${esc(m.fecha)}</td><td><code>${esc(m.nombre)}</code></td>
+      <td>${esc(m.tipo)}</td><td>${esc(m.origen || "")}</td>
+      <td class="num">${fmt(m.cantidad)}</td></tr>`).join("");
+  const traz = it.vinculo_tipo === "TRAZ" || it.vinculo === "trazabilidad";
+  const vinculoTxt = traz
+    ? "<b>TRAZ</b> &mdash; v&iacute;nculo deducido por trazabilidad FIFO"
+    : "<b>DOC</b> &mdash; v&iacute;nculo documental confirmado";
   $("#dBody").innerHTML = `
-    ${aviso}
     <div class="resume">
-      <span>Estado: <b>${esc(it.estado)}</b></span>
       <span>Devuelta: <b>${fmt(it.cantidad_devuelta)}</b></span>
-      <span>Vendida despu\u00e9s: <b>${fmt(it.cantidad_vendida_despues)}</b></span>
       <span>Pendiente: <b>${fmt(it.cantidad_pendiente)}</b></span>
+      <span>Stock actual del producto: <b>${fmt(it.stock_actual)}</b></span>
+      <span>Stock inicial no trazado: <b>${fmt(det.stock_inicial_no_trazado)}</b></span>
     </div>
-    <table class="mini"><thead><tr><th>Fecha</th><th>Documento</th><th>Tipo</th>
-      <th>Clase de movimiento</th><th>Cantidad</th></tr></thead><tbody>${filas}</tbody></table>
-    <p class="hint" style="margin-top:12px">Rastreo cronol\u00f3gico: las <b>salidas/ventas</b> despu\u00e9s de la
-      devoluci\u00f3n consumen primero las unidades devueltas (asignaci\u00f3n FIFO). Las <b>entradas de proveedor</b>,
-      <b>ajustes positivos</b> y <b>otras devoluciones</b> son stock nuevo y no se atribuyen a esta devoluci\u00f3n.
-      Las <b>transferencias internas</b> no alteran la disponibilidad y se ignoran para el saldo.
-      Las filas en rojo son ventas posteriores.</p>`;
+    <div class="vinculo ${traz ? "traz" : "doc"}">
+      <div class="vtit">V&iacute;nculo devoluci&oacute;n &rarr; compra: ${vinculoTxt}</div>
+      <div class="vtex">${esc(it.vinculo_detalle || "")}</div>
+      <div class="vtex">Orden de compra: <b>${esc(it.orden_compra)}</b> &middot;
+        Proveedor: ${esc(it.proveedor)} &middot; Costo unitario: ${fmt(it.costo_unitario)}</div>
+    </div>
+    <table class="mini"><thead><tr><th>Fecha</th><th>Documento</th><th>Tipo de movimiento</th>
+      <th>Origen</th><th>Cantidad</th></tr></thead><tbody>${filas}</tbody></table>
+    <p class="hint" style="margin-top:12px">Rastreo cronol&oacute;gico FIFO: las <b>ventas y salidas</b> posteriores
+      consumen primero las unidades m&aacute;s antiguas, de modo que las unidades devueltas se descuentan cuando
+      otro vendedor las vende. Las <b>recepciones de compra</b>, los <b>ajustes</b> y las <b>otras devoluciones</b>
+      son stock nuevo y no se atribuyen a esta devoluci&oacute;n. Los <b>traslados internos</b> no alteran la
+      disponibilidad y se ignoran para el saldo.</p>`;
 }
 
 $("#dClose").addEventListener("click", () => $("#ovDet").classList.remove("on"));

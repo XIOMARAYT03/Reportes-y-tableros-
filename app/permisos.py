@@ -53,8 +53,9 @@ def init_db():
                  "Consulta de saldos, movimientos y reportes de inventario"),
                 ("despacho", "Despacho - Tiempos por fase",
                  "Tiempos de despacho por pedido: picking, packing y output"),
-                ("devoluciones", "Devoluciones pendientes - Compras locales",
-                 "Productos de compras locales/puntuales devueltos por clientes y a\u00fan pendientes de salida (solo FINPAC)"),
+                ("devoluciones", "Devoluciones pendientes de compras puntuales - FINPAC",
+                 "Devoluciones de clientes de FINPAC de compras puntuales que siguen "
+                 "en el inventario sin venderse"),
             ]
             for clave, nombre, desc in semillas:
                 if not con.execute("SELECT 1 FROM modulos WHERE clave=?", (clave,)).fetchone():

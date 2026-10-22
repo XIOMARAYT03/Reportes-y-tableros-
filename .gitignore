@@ -1,0 +1,35 @@
+# Credenciales y configuracion local
+app/.env
+.env
+*.env.local
+
+# Espejo local del inventario (secreto? no: es derivado, pero es pesado)
+app/inventario.db
+app/inventario.db-wal
+app/inventario.db-shm
+*.db-wal
+*.db-shm
+
+# Copias de seguridad
+deploy/backup/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.Python
+venv/
+.venv/
+env/
+
+# Editores / SO
+.vscode/
+.idea/
+.vs/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Excel generados por los reportes
+*.xlsx

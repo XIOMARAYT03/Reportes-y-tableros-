@@ -1,20 +1,70 @@
-"""Devoluciones pendientes de compras locales - FINPAC.
+"""Devoluciones pendientes de compras puntuales - FINPAC.
 
-Identifica UNICAMENTE los productos de compras locales/puntuales que un cliente
-devolvio (movimientos DEVCL terminados) y que todavia tienen unidades pendientes
-de salida, es decir, que no se vendieron por completo despues de la devolucion.
+Identifica los productos de compras PUNTUALES/LOCALES de FINPAC que un cliente
+devolvio y que a la fecha siguen en el inventario sin venderse.
 
 Modulo de solo lectura sobre Odoo: NO escribe en el ERP, NO genera cobros ni
 descuentos, y NO modifica el Kardex existente. Reutiliza la conexion XML-RPC y
 la logica de inventario del servidor por inyeccion (evita import circular).
 
-El vendedor se obtiene SIEMPRE de la orden de venta original de la devolucion
-(sale.order.user_id), nunca de la compra.
+Como se determina una "compra puntual" (verificable en Odoo)
+------------------------------------------------------------
+Una devolucion solo entra al reporte si la compra que probo el producto es una
+compra puntual/local de FINPAC. La compra se localiza por tres vias verificables
+y se acepta la primera que coincida con el producto devuelto:
+
+  1. Via documental directa: la linea de venta original tiene purchase_line_ids
+     (campo propio del ERP) que apuntan a las lineas de la orden de compra.
+     Se revisan TODAS las lineas de la orden de venta que venden el mismo
+     producto: la compra puntual puede estar registrada en la linea hermana.
+  2. Via documental de la OC citada: el movimiento de salida original (el que
+     el cliente recibio y luego devolvio) cita el codigo de la OC en su
+     documento origen, p.ej. "P14563,S25196 - 260015499/TUB137: Salida>Clientes".
+  3. Via trazabilidad FIFO: la OC cuya capa fue consumida por la salida original
+     (la que entrego las unidades al cliente que devuelve).
+
+El vinculo usado se informa en el campo "vinculo" de cada fila:
+  "orden_venta" o "documento" = vinculo documental del ERP;
+  "trazabilidad" = la OC se dedujo de la traza FIFO de las capas.
+
+La compra se descarta cuando:
+  - esta marcada como importacion (purchase.order.is_import = True), o
+  - pertenece a otra empresa (el mismo codigo de OC existe en FINPAC y en
+    MASERVEN: solo se usa la OC de FINPAC), o
+  - su proveedor es una empresa del grupo (MASERVEN): son compras internas /
+    traspasos entre empresas, no compras locales de FINPAC, o
+  - no esta vinculada a la orden de venta original (la OC no la cita en origin
+    ni en group_id) y la linea de venta no usa una ruta comercial puntual
+    ("Compra Puntual (En Oficina)", "Cross-Dock").
+
+
+Como se calcula la cantidad pendiente
+--------------------------------------
+Odoo no permite identificar fisicamente las unidades devueltas, asi que se usa
+una trazabilidad cronologica FIFO por CAPAS sobre los movimientos reales:
+
+  - Cada entrada (recepcion de compra, ajuste positivo, devolucion de cliente)
+    abre una capa de stock con la fecha del movimiento.
+  - Cada salida (venta a cliente, ajuste de inventario, devolucion a proveedor,
+    traspaso a otra empresa) consume las capas mas ANTIGUAS primero (FIFO).
+  - Los traslados internos (PICK/PACK/PRCH/INT: interno -> interno) NO son
+    ventas: no abren ni consumen capas.
+  - La capa de la devolucion conserva su saldo mientras no sea consumida: esa
+    es la CANTIDAD PENDIENTE. Si otro vendedor vendio esas unidades despues,
+    su salida consume la capa de la devolucion y la pendiente baja. Si se
+    vendieron todas, la devolucion no aparece en el reporte.
+  - Las compras posteriores del mismo codigo abren capas nuevas: el stock
+    guardado despues NUNCA se atribuye a la devolucion original.
+
+El pool se siembra con el stock inicial no trazado (stock vivo de las
+ubicaciones internas de FINPAC menos el delta de los movimientos) de modo que
+la traza sea consistente con el inventario real del ERP.
 """
 import io
 import re
 import threading
-from collections import defaultdict
+import time
+from collections import defaultdict, deque
 from datetime import datetime
 
 # ---- Configuracion / acceso a Odoo inyectados por kardex_server ----
@@ -24,16 +74,22 @@ _ref = None
 _odoo_url = None
 _lock = threading.RLock()
 _cache = {}
+_cache_reporte = {}
+
+# El reporte es pesado (trazabilidad FIFO de todo el historial de los productos):
+# se cachea unos minutos para que el usuario no espere en cada consulta.
+CACHE_REPORTE_SEG = 300
 
 COMPANY_FINPAC = 1
 COMPANY_FINPAC_NOMBRE = "FINPAC"
 NO_ID = "No identificado"
-REVISAR = "Revisar"
+EPS = 1e-6
 
-# Route comercial que marca una compra puntual / en oficina (verificado en Odoo: id 17).
-PUNTUAL_HINTS = ("puntual", "en oficina")
-# Documento origen con el que una OC cita un pedido de venta (Sxxxxx).
-_RE_SALE = re.compile(r"S\d{4,6}")
+# Rutas comerciales que identifican una compra puntual/local en el ERP.
+RUTAS_PUNTUALES = ("puntual", "cross-dock", "cross dock")
+
+# Codigo de OC local de FINPAC (P12345) citado en los documentos de origen.
+_RE_OC = re.compile(r"\bP\d{4,6}\b")
 
 
 def configurar(sr, id_of, ref, url):
@@ -58,9 +114,8 @@ def _query(model, domain, fields, order=None, limit=None):
 
 
 def _bulk(model, ids, fields):
+    """Busca por ids en lotes (evita dominios gigantes)."""
     ids = sorted({i for i in ids if i})
-    if not ids:
-        return {}
     out = {}
     for i in range(0, len(ids), 400):
         chunk = ids[i:i + 400]
@@ -75,615 +130,658 @@ def _link(model, rec_id):
 
 
 # --------------------------------------------------------------------------- #
-# Descubrimiento de tipos de operacion y rutas (cacheado en memoria)
+# Ubicaciones y rutas comerciales
 # --------------------------------------------------------------------------- #
-def _devcl_types(company_id):
-    key = ("devcl", company_id)
+def _ubicaciones():
+    """Mapa id -> (usage, company_id) de todas las ubicaciones del ERP."""
+    with _lock:
+        if "locs" not in _cache:
+            m = {}
+            for l in _query("stock.location", [], ["id", "usage", "company_id", "complete_name"]):
+                m[l["id"]] = (l.get("usage"), _oid(l.get("company_id")))
+            _cache["locs"] = m
+        return _cache["locs"]
+
+
+def _almacenes(company_id):
+    """Ids de las ubicaciones internas (de almacen) de la empresa."""
+    key = ("alm", company_id)
     with _lock:
         if key not in _cache:
-            _cache[key] = [t["id"] for t in _query(
-                "stock.picking.type",
-                [("sequence_code", "=", "DEVCL"), ("code", "=", "incoming"),
-                 ("company_id", "=", company_id)], ["id"])]
+            locs = _ubicaciones()
+            _cache[key] = {i for i, (u, c) in locs.items()
+                           if u == "internal" and c == company_id}
         return _cache[key]
 
 
-def _puntual_route_ids():
-    key = "routes_puntual"
+def _rutas_puntuales():
+    """Ids de las rutas comerciales de compra puntual/local."""
     with _lock:
-        if key not in _cache:
-            _cache[key] = [r["id"] for r in _query("stock.route", [], ["id", "name"])
-                           if any(h in (r.get("name") or "").lower() for h in PUNTUAL_HINTS)]
-        return _cache[key]
+        if "rutas" not in _cache:
+            ids = set()
+            for r in _query("stock.route", [], ["id", "name"]):
+                nombre = (r.get("name") or "").lower()
+                if any(h in nombre for h in RUTAS_PUNTUALES):
+                    ids.add(r["id"])
+            _cache["rutas"] = ids
+        return _cache["rutas"]
 
 
-def _outgoing_type_ids(company_id):
-    key = ("out", company_id)
-    with _lock:
-        if key not in _cache:
-            _cache[key] = [t["id"] for t in _query(
-                "stock.picking.type",
-                [("code", "=", "outgoing"), ("company_id", "=", company_id)], ["id"])]
-        return _cache[key]
+def _usage(loc_id):
+    return (_ubicaciones().get(loc_id) or ("", None))[0]
 
 
 # --------------------------------------------------------------------------- #
-# Vinculacion devolucion -> compra local
+# Clasificacion de movimientos sobre las ubicaciones de la empresa
 # --------------------------------------------------------------------------- #
-def _es_importada(po):
-    """Criterio verificable de compra importada (excluida del reporte)."""
-    return bool(po.get("is_import"))
+CLASE_TRASLADO = "traslado"    # interno -> interno (no es venta)
+CLASE_ENTRADA = "entrada"      # hacia el almacen de la empresa
+CLASE_SALIDA = "salida"        # desde el almacen de la empresa
+CLASE_EXTERNO = "externo"      # no afecta al almacen de la empresa
 
 
-# Rutas comerciales que acreditan una compra puntual/local en FINPAC.
-PUNTUAL_ROUTE_IDS = (17, 4)  # "Compra Puntual (En Oficina)", "Finpac: Cross-Dock"
+def _clasificar(m, alm):
+    """Clase del movimiento respecto de las ubicaciones de la empresa.
 
-# Codigo de OC local de FINPAC citado en textos de documento (p.ej. "P14563",
-# "S25196 - 260015499"). Se extrae para vincular la devolucion con su compra.
-_RE_PO = re.compile(r"\bP\d{4,6}\b")
+    Se usa el uso de la ubicacion (customer/supplier/inventory/transit/
+    internal) combinado con la pertenencia de la ubicacion a la empresa: solo
+    las ubicaciones internas de FINPAC forman el almacen analizado.
+    """
+    src, dst = _oid(m.get("location_id")), _oid(m.get("location_dest_id"))
+    src_int = src in alm
+    dst_int = dst in alm
+    if src_int and dst_int:
+        return CLASE_TRASLADO, "traslado"
+    if dst_int and not src_int:
+        u = _usage(src)
+        if u == "customer":
+            return CLASE_ENTRADA, "devolucion"
+        if u == "supplier":
+            return CLASE_ENTRADA, "compra"
+        if u == "inventory":
+            return CLASE_ENTRADA, "ajuste_positivo"
+        if u == "transit":
+            return CLASE_ENTRADA, "traspaso_entrada"
+        return CLASE_ENTRADA, "entrada"
+    if src_int and not dst_int:
+        u = _usage(dst)
+        if u == "customer":
+            return CLASE_SALIDA, "venta"
+        if u == "inventory":
+            return CLASE_SALIDA, "ajuste_negativo"
+        if u == "supplier":
+            return CLASE_SALIDA, "devolucion_proveedor"
+        if u == "transit":
+            return CLASE_SALIDA, "traspaso"
+        return CLASE_SALIDA, "salida"
+    return CLASE_EXTERNO, "externo"
 
 
-def _po_names_en_texto(*textos):
-    """Codigos de OC (formato P####) presentes en uno o varios textos."""
+# --------------------------------------------------------------------------- #
+# Traza cronologica FIFO por capas
+# --------------------------------------------------------------------------- #
+MOV_CAMPOS_TRACE = ["id", "date", "quantity", "product_id", "location_id", "location_dest_id",
+                    "origin_returned_move_id", "origin"]
+MOV_CAMPOS_FULL = ["id", "name", "date", "quantity", "product_id", "location_id",
+                   "location_dest_id", "company_id", "purchase_line_id", "sale_line_id",
+                   "origin_returned_move_id", "origin"]
+
+
+def _movimientos(company_id, product_ids, completo=False):
+    """Movimientos done de los productos, agrupados y en orden cronologico.
+
+    completo=True agrega los campos descriptive (name, purchase_line_id, ...);
+    la traza FIFO solo necesita el juego corto de campos, que hace la lectura
+    mucho mas liviana.
+    """
+    out = defaultdict(list)
+    ids = sorted({p for p in product_ids if p})
+    campos = MOV_CAMPOS_FULL if completo else MOV_CAMPOS_TRACE
+    for i in range(0, len(ids), 50):
+        chunk = ids[i:i + 50]
+        for m in _query("stock.move",
+                        [("product_id", "in", chunk), ("state", "=", "done")],
+                        campos,
+                        order="date asc, id asc"):
+            out[_oid(m.get("product_id"))].append(m)
+    return out
+
+
+def _stock_vivo(company_id, product_ids, alm):
+    """Stock vivo del producto en las ubicaciones internas de la empresa."""
+    out = defaultdict(float)
+    ids = sorted({p for p in product_ids if p})
+    lista_alm = sorted(alm)
+    for i in range(0, len(ids), 50):
+        chunk = ids[i:i + 50]
+        for q in _query("stock.quant", [("product_id", "in", chunk)],
+                        ["product_id", "location_id", "quantity"]):
+            if _oid(q.get("location_id")) in alm:
+                out[_oid(q.get("product_id"))] += q.get("quantity") or 0.0
+    return out
+
+
+def _rastreo(movs, alm, inicial):
+    """Traza FIFO por capas de un producto. Devuelve {move_id: pendiente}.
+
+    inicial: stock inicial no trazado (capas mas antiguas). Las salidas
+    consumen las capas mas antiguas primero; el excedente que no cubre ninguna
+    capa se considera stock previo no trazado y no se imputa a la devolucion.
+    """
+    capas = deque()
+    if inicial > EPS:
+        capas.append([inicial, "", "inicial", None, None])
+    pendientes = defaultdict(float)
+    consumo = defaultdict(lambda: defaultdict(float))
+    for m in movs:
+        clase, sub = _clasificar(m, alm)
+        q = abs(m.get("quantity") or 0.0)
+        if q <= EPS or clase in (CLASE_TRASLADO, CLASE_EXTERNO):
+            continue
+        if clase == CLASE_ENTRADA:
+            po = _po_codigo(m.get("origin"))
+            if sub == "devolucion" and not po:
+                # las unidades devueltas son las que el cliente recibio: la
+                # compra de origen es la que consumio la salida original.
+                po = _dominante(consumo.get(_oid(m.get("origin_returned_move_id"))))
+            capas.append([q, m.get("date") or "", sub, m["id"], po])
+        elif clase == CLASE_SALIDA:
+            resto = q
+            while resto > EPS and capas:
+                c = capas[0]
+                toma = c[0] if c[0] <= resto else resto
+                c[0] -= toma
+                resto -= toma
+                if c[4]:
+                    consumo[m["id"]][c[4]] += toma
+                if c[0] <= EPS:
+                    capas.popleft()
+    for c in capas:
+        if c[2] == "devolucion" and c[3]:
+            pendientes[c[3]] += c[0]
+    return pendientes, consumo
+
+
+# --------------------------------------------------------------------------- #
+# Vinculo devolucion -> compra puntual
+# --------------------------------------------------------------------------- #
+def _ocs_citadas(*textos):
+    """Codigos de OC (P12345) presentes en los textos indicados."""
     out = []
     for t in textos:
         if not t:
             continue
-        for mm in _RE_PO.finditer(str(t)):
+        for mm in _RE_OC.finditer(str(t)):
             code = mm.group(0)
             if code not in out:
                 out.append(code)
     return out
 
 
-def _compra_local_de_linea(sl, pols, pos, origin_po_names=None, pols_por_nombre=None):
-    """Devuelve (po, pl) de la compra local que origino la devolucion, o (None,_).
+def _po_codigo(texto):
+    """Primer codigo de OC (P12345) citado en un texto."""
+    mm = _RE_OC.search(str(texto or ""))
+    return mm.group(0) if mm else None
 
-    Vias verificables, en orden de fiabilidad:
-      1. purchase_line_ids documental de la linea de venta.
-      2. Codigo(s) de OC citados en el documento (devolucion y/o salida original),
-         p.ej. origin = "P14563" o "S25196 - 260015499".
-    Se descartan las POs marcadas como importacion. Si la linea de venta tiene
-    producto, la OC candidata debe contener ese mismo producto (evita cruzar
-    compras de otro item citadas en el mismo documento). No fusiona varias:
-    devuelve la primera compra local comprobable.
+
+def _dominante(con):
+    """Codigo de OC mas consumido dentro de un diccionario {oc: cantidad}."""
+    if not con:
+        return None
+    return max(con.items(), key=lambda kv: kv[1])[0]
+
+
+def _es_importada(po):
+    return bool(po.get("is_import"))
+
+
+def _proveedores_grupo():
+    """Partner ids de las empresas del grupo (MASERVEN y FINPAC).
+
+    Una OC cuyo proveedor es una de esas empresas NO es una compra local:
+    es una compra interna/traspaso entre empresas del grupo, y este modulo es
+    exclusivo de FINPAC, por lo que no se reporta.
     """
-    # via 1: vinculo documental directo
-    for plid in (sl.get("purchase_line_ids") or []):
-        pl = pols.get(plid)
-        if not pl:
-            continue
-        po = pos.get(_oid(pl.get("order_id")))
-        if not po or _es_importada(po):
-            continue
-        return po, pl
-    # via 2: OC citada como origen (de la devolucion o de la salida original)
-    if origin_po_names and pols_por_nombre:
-        pid_sl = _oid(sl.get("product_id"))
-        for name in origin_po_names:
-            for pl in pols_por_nombre.get((name or "").strip(), []):
-                po = pos.get(_oid(pl.get("order_id")))
-                if not po or _es_importada(po):
-                    continue
-                if pid_sl and _oid(pl.get("product_id")) and _oid(pl.get("product_id")) != pid_sl:
-                    continue
-                return po, pl
-    return None, None
-
-
-def _compras_locales_por_producto(product_id, pol_por_producto, pos):
-    """Compras locales conocidas del producto (para detectar ambiguedad/adicionales)."""
-    out = []
-    for pl in pol_por_producto.get(product_id, []):
-        po = pos.get(_oid(pl.get("order_id")))
-        if po and not _es_importada(po):
-            out.append((po, pl))
-    return out
-
-
-# --------------------------------------------------------------------------- #
-# Analisis posterior: rastreo cronologico de la devolucion en el inventario
-# --------------------------------------------------------------------------- #
-# La clasificacion de cada movimiento se hace por la NATURALEZA de sus
-# ubicaciones (usage de stock.location), no solo por el tipo de operacion:
-#   - sale a      -> usage "customer"  (venta / entrega real)
-#   - entra desde -> usage "supplier"  (recepcion real de compra)
-#   - ajuste      -> usage "inventory" (ajuste de inventario / desecho)
-#   - interno     -> ambos extremos internos (no altera la disponibilidad neta)
-# Esto es verificable en Odoo y estable ante cambios de flujos/almacenes.
-_VIRTUAL_USAGE_CUSTOMER = "customer"
-_VIRTUAL_USAGE_SUPPLIER = "supplier"
-_VIRTUAL_USAGE_INVENTORY = "inventory"
-
-
-def _ubicaciones_virtuales(company_id):
-    """Mapa id -> usage para las ubicaciones que NO son internas (cacheado)."""
-    key = ("locs_usage", company_id)
     with _lock:
-        if key not in _cache:
-            m = {}
-            for l in _query("stock.location", [("company_id", "=", company_id)],
-                            ["id", "usage"]):
-                m[l["id"]] = l.get("usage")
-            # las ubicaciones compartidas (Socios/Clientes, Proveedores, virtuales)
-            # pueden tener company_id vacio; se traen aparte.
-            for l in _query("stock.location", [("company_id", "=", False)],
-                            ["id", "usage"]):
-                m.setdefault(l["id"], l.get("usage"))
-            _cache[key] = m
-        return _cache[key]
+        if "grupo" not in _cache:
+            ids = set()
+            for c in _query("res.company", [], ["id", "partner_id"]):
+                pid = _oid(c.get("partner_id"))
+                if pid:
+                    ids.add(pid)
+            _cache["grupo"] = ids
+        return _cache["grupo"]
 
 
-def _movimientos_productos(company_id, product_ids):
-    """Todos los movimientos done de los productos, agrupados por producto.
+def _es_compra_interna(po):
+    """True si el proveedor de la OC es una empresa del grupo (no MASERVEN)."""
+    pid = _oid(po.get("partner_id"))
+    return bool(pid) and pid in _proveedores_grupo()
 
-    Una sola consulta por lote en lugar de una por caso: el historial completo de
-    cada producto se reutiliza para rastrear el destino de las unidades devueltas
-    y detectar stock nuevo (compras/ajustes posteriores) del mismo codigo.
+
+def _po_cita_venta(po, so_id, so_nombre):
+    """True si la OC esta vinculada a la orden de venta original."""
+    if so_id and _oid(po.get("group_id")) == so_id:
+        return True
+    if so_nombre and so_nombre in (po.get("origin") or ""):
+        return True
+    return (po.get("sale_order_count") or 0) > 0
+
+
+def _buscar_compra(product_id, sl_orden, pols, pos, so_id, so_nombre, ocs_citadas,
+                    lineas_por_codigo):
+    """Localiza la OC puntual que probo el producto devuelto.
+
+    Se revisan TODAS las lineas de la orden de venta original que venden el
+    mismo producto: en este ERP la compra puntual puede quedar registrada en
+    otra linea de la misma orden (la que uso la ruta "Compra Puntual").
+
+    Devuelve un dict con:
+      po / pl      : la OC y su linea de compra (None si no hay)
+      vinculo      : "orden_venta" | "documento" (ambos documentales)
+      internas     : OC descartadas por ser compras internas entre empresas
+                     del grupo (MASERVEN/FINPAC)
+      importadas   : OC descartadas por ser ordenes de importacion (is_import)
     """
-    out = defaultdict(list)
-    ids = sorted({p for p in product_ids if p})
-    for i in range(0, len(ids), 200):
-        chunk = ids[i:i + 200]
-        for m in _query("stock.move",
-                        [("company_id", "=", company_id), ("product_id", "in", chunk),
-                         ("state", "=", "done")],
-                        ["id", "date", "quantity", "picking_type_id", "product_id",
-                         "location_id", "location_dest_id", "is_inventory", "reference"],
-                        order="date asc, id asc"):
-            out[_oid(m.get("product_id"))].append(m)
-    return out
+    rutas = _rutas_puntuales()
+    ruta_puntual = any(_oid(l.get("route_id")) in rutas for l in sl_orden)
+    res = {"po": None, "pl": None, "vinculo": None, "internas": [], "importadas": []}
+
+    def _candidato(pl):
+        """OC de una linea de compra, o None si esa OC no es admisible."""
+        po = pos.get(_oid(pl.get("order_id")))
+        if not po or _oid(po.get("company_id")) != COMPANY_FINPAC:
+            return None
+        if _oid(pl.get("product_id")) and _oid(pl.get("product_id")) != product_id:
+            return None
+        if _es_importada(po):
+            res["importadas"].append(po)
+            return None
+        if _es_compra_interna(po):
+            res["internas"].append(po)
+            return None
+        return po
+
+    # via 1: vinculo documental directo de la linea de venta
+    for l in sl_orden:
+        for plid in (l.get("purchase_line_ids") or []):
+            pl = pols.get(plid)
+            if not pl:
+                continue
+            po = _candidato(pl)
+            if po is None:
+                continue
+            if _po_cita_venta(po, so_id, so_nombre) or ruta_puntual:
+                res.update(po=po, pl=pl, vinculo="orden_venta")
+                return res
+    # via 2: OC citada en el documento de la salida original / devolucion
+    for code in ocs_citadas:
+        for pl in lineas_por_codigo.get(code, []):
+            po = _candidato(pl)
+            if po is None:
+                continue
+            if _po_cita_venta(po, so_id, so_nombre) or ruta_puntual:
+                res.update(po=po, pl=pl, vinculo="documento")
+                return res
+    return res
 
 
-# Usages que representan salida definitiva del stock disponible del almacen.
-_USAGE_SALIDA = {"customer", "inventory", "production"}
-_USAGE_INTERNO = {"internal", "transit"}
+# Texto que explica como se determino el vinculo devolucion -> compra.
+VINCULO_DOC_TXT = ("Vinculo documental: la orden de venta original apunta a esta OC "
+                   "de compra puntual de FINPAC (linea de compra registrada en la orden).")
+VINCULO_TRAZ_TXT = ("Vinculo por trazabilidad FIFO: la OC se dedujo de la capa de stock "
+                    "que surtio la entrega al cliente que devuelve. No hay vinculo "
+                    "documental de compra en la orden de venta; es una deduccin por "
+                    "trazabilidad de capas.")
 
-
-def _clasificar_movimiento(m, locs_usage):
-    """Clase de un movimiento segun la NATURALEZA de sus ubicaciones.
-
-    Devuelve uno de:
-      "venta"              -> salida a cliente (uso customer).
-      "salida_ajuste"      -> egreso por ajuste/desecho/produccion (uso inventory/
-                              production como destino, o sea el almacen pierde stock).
-      "entrada"            -> ingreso real de proveedor o ajuste positivo/producto.
-      "devolucion_cliente" -> entra desde customer a una ubicacion interna.
-      "interno"            -> reubicacion entre ubicaciones internas/transito
-                              (NO altera la disponibilidad neta; se ignora).
-      "otro"               -> patron no reconocido (se ignora para el saldo).
-
-    Regla general por usages, no por tipo de operacion ni por is_inventory:
-    un traslado interno registrado como ajuste (interno -> interno, is_inventory)
-    es una reubicacion, NO una salida.
-    """
-    src = _oid(m.get("location_id"))
-    dst = _oid(m.get("location_dest_id"))
-    u_src = locs_usage.get(src)
-    u_dst = locs_usage.get(dst)
-
-    src_int = u_src in _USAGE_INTERNO
-    dst_int = u_dst in _USAGE_INTERNO
-
-    # 1) devolucion de cliente: sale de Clientes y entra al almacen
-    if u_src == _VIRTUAL_USAGE_CUSTOMER and dst_int:
-        return "devolucion_cliente"
-    # 2) venta / entrega a cliente
-    if u_dst == _VIRTUAL_USAGE_CUSTOMER and src_int:
-        return "venta"
-    # 3) ingreso real de proveedor (o desde inventario virtual hacia el almacen)
-    if u_src == _VIRTUAL_USAGE_SUPPLIER and dst_int:
-        return "entrada"
-    # 4) ingreso por ajuste positivo: de inventario virtual/produccion hacia el almacen
-    if u_src in _USAGE_SALIDA and dst_int and u_src != _VIRTUAL_USAGE_CUSTOMER:
-        return "entrada"
-    # 5) egreso por ajuste/desecho/produccion: del almacen hacia inventario virtual
-    if src_int and u_dst in _USAGE_SALIDA and u_dst != _VIRTUAL_USAGE_CUSTOMER:
-        return "salida_ajuste"
-    # 6) reubicacion interna (incluye traslados registrados como ajuste)
-    if src_int and dst_int:
-        return "interno"
-    return "otro"
-
-
-def _rastrear(movs, fecha_dev, move_ids, cant_devuelta, locs_usage):
-    """Rastrea cronologicamente el destino de las unidades devueltas.
-
-    Criterio consistente (no certeza de unidades fisicas): se mantiene un saldo
-    FIFO de la devolucion. Las salidas (ventas/ajustes negativos) consumen primero
-    las unidades devueltas y, si ya no quedan, el stock nuevo. Las entradas
-    (compras/ajustes positivos) NO se atribuyen a la devolucion: son stock nuevo.
-
-    Devuelve dict con:
-      - vendida: unidades de la devolucion que salieron (imputadas FIFO).
-      - pendiente: unidades de la devolucion que siguen en inventario.
-      - stock_nuevo_posterior: unidades ingresadas despues (compras/ajustes +),
-        que hacen que el stock actual NO equivalga a la devolucion.
-      - compras_posteriores/ajustes_posteriores/ventas_posteriores: desglose.
-      - primer_evento, ultimo_evento: fechas extremas consideradas.
-    """
-    move_ids = set(move_ids)
-    dev_restante = float(cant_devuelta)
-    vendida = 0.0
-    entradas = 0.0
-    ajustes_in = 0.0
-    ajustes_out = 0.0
-    ventas = 0.0
-    primer = None
-    ultimo = None
-
-    for m in movs:
-        if m["id"] in move_ids:
-            continue
-        if m["date"] < fecha_dev:
-            continue
-        q = abs(m.get("quantity") or 0.0)
-        if q == 0:
-            continue
-        clase = _clasificar_movimiento(m, locs_usage)
-        if primer is None:
-            primer = m["date"]
-        ultimo = m["date"]
-
-        if clase in ("interno", "otro", "devolucion_cliente"):
-            # reubicacion interna u otro patron: no altera la disponibilidad
-            continue
-        if clase == "entrada":
-            entradas += q
-            continue
-        # clases que sacan unidades del almacen disponible (venta / ajuste de egreso)
-        if clase == "venta":
-            ventas += q
-        elif clase == "salida_ajuste":
-            ajustes_out += q
-        # imputacion FIFO: primero consume lo devuelto
-        consume = min(dev_restante, q)
-        if consume > 0:
-            dev_restante -= consume
-            vendida += consume
-
-    return {
-        "vendida": round(vendida, 4),
-        "pendiente": round(max(0.0, dev_restante), 4),
-        "stock_nuevo": round(entradas + ajustes_in, 4),
-        "entradas": round(entradas, 4),
-        "ajustes_in": round(ajustes_in, 4),
-        "ajustes_out": round(ajustes_out, 4),
-        "ventas": round(ventas, 4),
-        "primer_evento": primer,
-        "ultimo_evento": ultimo,
-    }
 
 
 # --------------------------------------------------------------------------- #
 # Reporte
 # --------------------------------------------------------------------------- #
-def build(company_id=COMPANY_FINPAC, desde="", hasta="", vendedor=""):
-    """Construye el reporte de devoluciones pendientes de compras locales.
+def build(company_id=COMPANY_FINPAC, desde="", hasta="", refresh=False):
+    """Devoluciones pendientes de compras puntuales de FINPAC.
 
     company_id se fuerza a FINPAC (1): este modulo es exclusivo de esa empresa.
+    desde/hasta acotan las devoluciones (fecha del movimiento de devolucion).
+    refresh=True fuerza a reconsultar el ERP (no usa la cache del reporte).
     """
     company_id = COMPANY_FINPAC
-    devcl = _devcl_types(company_id)
-    out_types = _outgoing_type_ids(company_id)
-    puntual = _puntual_route_ids()
-    locs_usage = _ubicaciones_virtuales(company_id)
-    customer_ids = [i for i, u in locs_usage.items() if u == _VIRTUAL_USAGE_CUSTOMER]
+    clave_cache = (desde, hasta)
+    if not refresh:
+        ent = _cache_reporte.get(clave_cache)
+        if ent and time.time() - ent[0] < CACHE_REPORTE_SEG:
+            return ent[1]
+    locs = _ubicaciones()
+    alm = _almacenes(company_id)
 
     vacio = {"ok": True, "empresa": {"id": company_id, "nombre": COMPANY_FINPAC_NOMBRE},
-             "items": [], "total": 0, "vendedores": [], "candidatas": 0,
-             "incluidas": 0, "excluidas": 0, "exclusiones": [],
-             "mensaje": "No se encontraron devoluciones pendientes de compras locales."}
-    if not devcl:
-        vacio["mensaje"] = "No existe un tipo de operacion DEVCL para FINPAC."
-        return vacio
+             "items": [], "total": 0, "candidatas": 0, "incluidas": 0,
+             "excluidas": 0, "exclusiones": [], "generado": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+             "mensaje": "No se encontraron devoluciones pendientes de compras puntuales."}
 
-    # 1) devoluciones terminadas en el rango. Candidata = movimiento done cuyo
-    # ORIGEN es una ubicacion de cliente (usage customer) y DESTINO una ubicacion
-    # interna. Esto cubre TODAS las devoluciones, no solo el picking_type DEVCL.
+    # 1) devoluciones terminadas en el rango. Candidata = movimiento done que
+    #    entra al almacen desde una ubicacion de cliente (todas las devoluciones,
+    #    no solo las del tipo de operacion DEVCL).
     dom = [("company_id", "=", company_id), ("state", "=", "done"),
-           ("location_id", "in", customer_ids)]
+           ("location_id.usage", "=", "customer")]
     if desde:
         dom.append(("date", ">=", desde + " 00:00:00"))
     if hasta:
         dom.append(("date", "<=", hasta + " 23:59:59"))
-    mv_raw = _query("stock.move", dom,
-                    ["id", "name", "date", "product_id", "quantity", "picking_id",
-                     "picking_type_id", "location_id", "location_dest_id",
-                     "sale_line_id", "origin_returned_move_id"],
-                    order="date asc, id asc", limit=20000)
-    # solo las que entran al almacen (destino interno): una venta no es devolucion
-    mv = [m for m in mv_raw if locs_usage.get(_oid(m.get("location_dest_id"))) in _USAGE_INTERNO]
-    candidatas_total = len(mv)
+    mv = _query("stock.move", dom,
+                ["id", "name", "date", "product_id", "quantity", "picking_id",
+                 "sale_line_id", "origin_returned_move_id", "origin", "location_usage",
+                 "location_dest_usage", "company_id", "location_id", "location_dest_id"],
+                order="date asc, id asc", limit=20000)
+    # solo las que entran al almacen: una venta no es devolucion
+    mv = [m for m in mv if _usage(_oid(m.get("location_dest_id"))) == "internal"]
     if not mv:
         return vacio
+    candidatas_total = len(mv)
 
     # 2) datos relacionados
     picks = _bulk("stock.picking", [_oid(m.get("picking_id")) for m in mv],
-                  ["id", "name", "partner_id", "origin", "sale_id", "purchase_id"])
-    # salida original (para leer la OC citada en su documento origen)
-    ret_move_ids = sorted({_oid(m.get("origin_returned_move_id"))
-                           for m in mv if m.get("origin_returned_move_id")})
-    ret_moves = _bulk("stock.move", ret_move_ids,
-                      ["id", "picking_id", "origin", "reference"])
-    ret_picks = _bulk("stock.picking",
-                      [(_oid(r.get("picking_id")) if r.get("picking_id") else None)
-                       for r in ret_moves.values()],
-                      ["id", "name", "origin"])
-    sl_ids = [_oid(m.get("sale_line_id")) for m in mv]
+                  ["id", "name", "origin", "partner_id", "sale_id"])
+    ret_ids = [_oid(m.get("origin_returned_move_id")) for m in mv]
+    ret_moves = _bulk("stock.move", ret_ids,
+                      ["id", "name", "origin", "sale_line_id", "picking_id", "quantity", "date"])
+    # la linea de venta original: la de la devolucion o la de la salida original
+    sl_ids = []
+    for m in mv:
+        sl = _oid(m.get("sale_line_id"))
+        if not sl:
+            sl = _oid((ret_moves.get(_oid(m.get("origin_returned_move_id"))) or {}).get("sale_line_id"))
+        sl_ids.append(sl)
     sols = _bulk("sale.order.line", sl_ids,
-                 ["id", "order_id", "route_id", "purchase_line_ids", "product_id"])
-    sos = _bulk("sale.order", [_oid((sols.get(i) or {}).get("order_id")) for i in sl_ids],
-                ["id", "name", "partner_id", "user_id"])
-    prods = _bulk("product.product", [_oid(m.get("product_id")) for m in mv],
-                  ["id", "default_code", "name", "display_name", "uom_id"])
-    partners = _bulk("res.partner",
-                     [_oid((picks.get(_oid(m.get("picking_id"))) or {}).get("partner_id"))
-                      for m in mv] +
-                     [_oid((sos.get(_oid((sols.get(i) or {}).get("order_id"))) or {}).get("user_id"))
-                      for i in sl_ids],
-                     ["id", "name"])
+                 ["id", "order_id", "product_id", "route_id", "purchase_line_ids",
+                  "product_uom_qty", "qty_returned", "name"])
+    so_ids = [_oid((sols.get(i) or {}).get("order_id")) for i in sl_ids]
+    sos = _bulk("sale.order", so_ids,
+                ["id", "name", "partner_id", "user_id", "date_order", "state", "origin"])
+    # todas las lineas de las ordenes de venta originales (el vinculo de compra
+    # puntual puede estar en otra linea de la misma orden con el mismo producto)
+    sl_orden = {}
+    if so_ids:
+        for i in range(0, len(so_ids), 300):
+            for l in _query("sale.order.line", [("order_id", "in", so_ids[i:i + 300])],
+                            ["id", "order_id", "product_id", "route_id", "purchase_line_ids"]):
+                sl_orden[l["id"]] = l
+    prod_ids = sorted({_oid(m.get("product_id")) for m in mv if m.get("product_id")})
+    prods = _bulk("product.product", prod_ids,
+                  ["id", "default_code", "name", "display_name", "uom_id",
+                   "qty_available", "free_qty"])
 
-    # POs de las lineas devueltas (documental)
-    pl_ids = sorted({pid for i in sl_ids
-                     for pid in ((sols.get(i) or {}).get("purchase_line_ids") or [])})
+    # lineas de compra vinculadas a las lineas de venta (vinculo documental)
+    pl_ids = sorted({p for l in sl_orden.values()
+                     for p in (l.get("purchase_line_ids") or [])})
     pols = _bulk("purchase.order.line", pl_ids,
                  ["id", "order_id", "product_id", "price_unit", "product_qty", "qty_received"])
-    pos = _bulk("purchase.order", [_oid(p.get("order_id")) for p in pols.values()],
-                ["id", "name", "partner_id", "date_order", "date_approve", "is_import", "origin"])
 
-    # compras locales conocidas por producto (deteccion de adicionales / ambiguedad)
-    prod_ids = sorted({_oid(m.get("product_id")) for m in mv if m.get("product_id")})
-    pol_por_producto = defaultdict(list)
-    for i in range(0, len(prod_ids), 300):
-        chunk = prod_ids[i:i + 300]
-        for pl in _query("purchase.order.line", [("product_id", "in", chunk)],
-                         ["id", "order_id", "product_id", "price_unit"]):
-            pol_por_producto[_oid(pl.get("product_id"))].append(pl)
-    pos_extra = _bulk("purchase.order",
-                      [_oid(pl.get("order_id")) for lst in pol_por_producto.values() for pl in lst],
-                      ["id", "name", "partner_id", "date_order", "date_approve", "is_import", "origin"])
-    pos_all = {**pos, **pos_extra}
-
-    # lineas de compra indexadas por codigo de OC (para la via origin -> OC citada)
-    pols_por_nombre = defaultdict(list)
-    for lst in pol_por_producto.values():
-        for pl in lst:
-            po = pos_all.get(_oid(pl.get("order_id")))
-            if po and po.get("name"):
-                pl = dict(pl)
-                pl["order_id"] = po["id"]
-                pols_por_nombre[po["name"]].append(pl)
-
-    # costo unitario de la devolucion (capa de valorizacion) como respaldo
-    costo_dev = {}
-    for lay in _query("stock.valuation.layer",
-                      [("stock_move_id", "in", [m["id"] for m in mv])],
-                      ["stock_move_id", "quantity", "unit_cost"]):
-        mid = _oid(lay.get("stock_move_id"))
-        q, uc = lay.get("quantity") or 0.0, lay.get("unit_cost") or 0.0
-        acc = costo_dev.setdefault(mid, [0.0, 0.0])
-        acc[0] += q
-        acc[1] += q * uc
-    costo_dev = {k: (v[1] / v[0] if v[0] else None) for k, v in costo_dev.items()}
-
-    # historial completo de movimientos de los productos (una consulta por lote)
-    movs_por_producto = _movimientos_productos(company_id, prod_ids)
-
-    # 3) agrupar devoluciones por (producto, pedido de venta) para no duplicar
-    grupos = defaultdict(lambda: {"cantidad": 0.0, "fecha_min": None, "move_ids": [],
-                                  "primera_move": None})
-    for m in mv:
-        sl = sols.get(_oid(m.get("sale_line_id"))) or {}
-        so = sos.get(_oid(sl.get("order_id"))) or {}
-        clave = (_oid(m.get("product_id")), _oid(so.get("order_id")) or _oid(m.get("sale_line_id")),
-                 _oid(m.get("sale_line_id")))
-        g = grupos[clave]
+    # 3) agrupar devoluciones por (producto, linea de venta)
+    grupos = {}
+    for m, slid in zip(mv, sl_ids):
+        pid = _oid(m.get("product_id"))
+        clave = (pid, slid)
+        g = grupos.get(clave)
+        if g is None:
+            g = grupos[clave] = {"cantidad": 0.0, "fecha": m["date"], "moves": [],
+                                 "fecha_min": m["date"], "primer_move": m}
         g["cantidad"] += m.get("quantity") or 0.0
-        g["move_ids"].append(m["id"])
-        if g["fecha_min"] is None or m["date"] < g["fecha_min"]:
+        g["moves"].append(m["id"])
+        if m["date"] < g["fecha_min"]:
             g["fecha_min"] = m["date"]
-            g["primera_move"] = m
-        g["_m"] = m
-        g["_sl"] = sl
-        g["_so"] = so
+            g["primer_move"] = m
+
+    # 4) traza cronologica FIFO por producto (una consulta por lote)
+    movs_por_producto = _movimientos(company_id, prod_ids)
+    stock_vivo = _stock_vivo(company_id, prod_ids, alm)
+    pendientes_por_move, consumo_por_move = {}, {}
+    for pid in prod_ids:
+        movs = movs_por_producto.get(pid, [])
+        inicial = stock_vivo.get(pid, 0.0) - _delta_movimientos(movs, alm)
+        pend, cons = _rastreo(movs, alm, inicial)
+        pendientes_por_move[pid] = pend
+        consumo_por_move[pid] = cons
+
+    # 5) OC que supplying las unidades (trazabilidad FIFO de la salida original)
+    #    y OC citadas en los documentos de los movimientos.
+    traza_oc = {}
+    codigos = set()
+    for m, slid in zip(mv, sl_ids):
+        ret_m = ret_moves.get(_oid(m.get("origin_returned_move_id"))) or {}
+        pk = picks.get(_oid(m.get("picking_id"))) or {}
+        codigos.update(_ocs_citadas(m.get("origin"), ret_m.get("origin"),
+                                    ret_m.get("name"), pk.get("origin")))
+        pid = _oid(m.get("product_id"))
+        salida = _oid(m.get("origin_returned_move_id"))
+        po_fis = _dominante(consumo_por_move.get(pid, {}).get(salida))
+        if po_fis:
+            codigos.add(po_fis)
+            traza_oc.setdefault((pid, slid), po_fis)
+    campos_po = ["id", "name", "partner_id", "date_order", "date_approve", "is_import",
+                 "origin", "group_id", "sale_order_count", "state", "company_id"]
+    # el mismo codigo de OC existe en FINPAC y en MASERVEN: solo la de FINPAC
+    pos_por_codigo = {}
+    if codigos:
+        nombres = set(codigos)
+        nombres.update("PO" + c[1:] for c in codigos if c.startswith("P"))
+        for po in _query("purchase.order",
+                         [("name", "in", sorted(nombres)), ("company_id", "=", company_id)],
+                         campos_po):
+            pos_por_codigo[po["name"]] = po
+    lineas_por_codigo = defaultdict(list)
+    pos_por_id = {po["id"]: po for po in pos_por_codigo.values()}
+    if pos_por_id:
+        po_ids = sorted(pos_por_id)
+        for i in range(0, len(po_ids), 300):
+            for pl in _query("purchase.order.line", [("order_id", "in", po_ids[i:i + 300])],
+                             ["id", "order_id", "product_id", "price_unit"]):
+                po = pos_por_id.get(_oid(pl.get("order_id")))
+                if po:
+                    lineas_por_codigo[po["name"]].append(pl)
+
+    pos = _bulk("purchase.order",
+                [_oid(p.get("order_id")) for p in pols.values()] + list(pos_por_id),
+                campos_po)
 
     items = []
-    vendedores = {}
-    exclusiones = []  # auditoria de cobertura
-    for (pid, _soid, slid), g in grupos.items():
+    exclusiones = []
+    for (pid, slid), g in grupos.items():
         prod = prods.get(pid) or {}
-        m = g["_m"]
-        sl = g["_sl"]
-        so = g["_so"]
-        pk = picks.get(_oid(m.get("picking_id"))) or {}
+        sl = sols.get(slid) or {}
+        so = sos.get(_oid(sl.get("order_id"))) or {}
+        so_id = _oid(so.get("id"))
+        so_nombre = so.get("name")
+        primer = g["primer_move"]
+        ret_m = ret_moves.get(_oid(primer.get("origin_returned_move_id"))) or {}
+        pk = picks.get(_oid(primer.get("picking_id"))) or {}
 
-        cand_ref = {"move_id": m["id"], "fecha": g["fecha_min"],
-
-                    "codigo": prod.get("default_code") or NO_ID,
-                    "orden_venta": so.get("name") or NO_ID,
+        cand_ref = {"producto_id": pid, "codigo": prod.get("default_code") or NO_ID,
+                    "orden_venta": so_nombre or NO_ID, "fecha": g["fecha_min"],
                     "cantidad": round(g["cantidad"], 4)}
 
-        # vendedor desde la orden de venta original (nunca de la compra)
-        vend_nombre = _label(so.get("user_id")) or ""
-        if not vend_nombre:
-            vend_nombre = (partners.get(_oid(so.get("user_id"))) or {}).get("name") or ""
-        if not vend_nombre:
-            vend_nombre = NO_ID
-
-        # compra local de origen: via documental (purchase_line_ids) o via OC citada
-        # en el documento de devolucion y/o en la salida original.
-        ret_m = ret_moves.get(_oid(m.get("origin_returned_move_id"))) or {}
-        ret_pk = ret_picks.get(_oid(ret_m.get("picking_id"))) or {}
-        origin_po_names = _po_names_en_texto(
-            pk.get("origin"), ret_m.get("origin"), ret_m.get("reference"),
-            ret_pk.get("origin"))
-        po, pl = _compra_local_de_linea(sl, pols, pos_all,
-                                        origin_po_names=origin_po_names,
-                                        pols_por_nombre=pols_por_nombre)
-        if po is None:
-            exclusiones.append({**cand_ref, "motivo": "sin_compra_local",
-                                "detalle": "No se pudo vincular una compra local/puntual "
-                                           "(sin purchase_line_ids ni OC P#### citada en "
-                                           "la devolucion ni en la salida original)."})
-            continue
-
-        vendedores[vend_nombre] = True
-
-        # cantidad devuelta acumulada del producto+pedido
-        cant_dev = round(g["cantidad"], 4)
-
-        # rastreo cronologico del destino de las unidades devueltas
-        tr = _rastrear(movs_por_producto.get(pid, []), g["fecha_min"], g["move_ids"],
-                       cant_dev, locs_usage)
-        vendida = tr["vendida"]
-        pendiente = tr["pendiente"]
-
-        # compras locales ADICIONALES del mismo codigo posteriores a la devolucion:
-        # refuerzan que el stock actual no es necesariamente el devuelto.
-        fecha_dev_dia = g["fecha_min"][:10]
-        compras_extra = []
-        for cpo, cpl in _compras_locales_por_producto(pid, pol_por_producto, pos_all):
-            if po and _oid(cpo["id"]) == _oid(po["id"]):
-                continue
-            f = (cpo.get("date_approve") or cpo.get("date_order") or "")[:10]
-            if f and f >= fecha_dev_dia:
-                compras_extra.append((cpo, cpl))
-
-        # ---- estado del caso ----
-        if pendiente <= 0:
-            estado = "VENDIDO COMPLETAMENTE"
-        elif vendida > 0:
-            estado = "PARCIALMENTE VENDIDO"
-        else:
-            estado = "PENDIENTE"
-
-        # exclusion: si se vendio por completo despues de la devolucion, no es un
-        # caso pendiente y no se lista (pero queda registrado en la auditoria).
-        if estado == "VENDIDO COMPLETAMENTE":
+        # ---- trazabilidad: unidades devueltas que siguen en el almacen ----
+        pendientes = pendientes_por_move.get(pid, {})
+        cant_devuelta = round(g["cantidad"], 4)
+        pendiente = round(sum(pendientes.get(mid, 0.0) for mid in g["moves"]), 4)
+        if pendiente <= EPS:
             exclusiones.append({**cand_ref, "motivo": "vendido_completamente",
-                                "detalle": f"Las {cant_dev:g} u. devueltas salieron por completo "
-                                           f"despu\u00e9s de la devoluci\u00f3n."})
+                                "detalle": f"Las {cant_devuelta:g} u. devueltas salieron "
+                                           f"por completo despues de la devolucion."})
             continue
 
-        # avisos: stock nuevo posterior o compras adicionales => la cantidad
-        # pendiente es una estimacion por asignacion FIFO, no certeza fisica.
-        ambiguo = bool(tr["stock_nuevo"] > 0 or compras_extra)
-        aviso = ""
-        if ambiguo:
-            partes = []
-            if tr["entradas"] > 0:
-                partes.append(f"{tr['entradas']:g} u. recibidas de proveedor")
-            if compras_extra:
-                partes.append(f"{len(compras_extra)} compra(s) posterior(es) del mismo c\u00f3digo")
-            aviso = ("Hubo " + " y ".join(partes) +
-                     " despu\u00e9s de la devoluci\u00f3n: la cantidad pendiente se estima por "
-                     "asignaci\u00f3n FIFO, no es certeza f\u00edsica de las mismas unidades.")
+        # ---- compra puntual vinculada ----
+        ocs = _ocs_citadas(primer.get("origin"), ret_m.get("origin"),
+                            ret_m.get("name"), pk.get("origin"))
+        lineas_ov = [l for l in sl_orden.values()
+                     if _oid(l.get("order_id")) == so_id
+                     and _oid(l.get("product_id")) == pid]
+        res = _buscar_compra(pid, lineas_ov, pols, pos, so_id, so_nombre, ocs,
+                             lineas_por_codigo)
+        po, pl, origen_vinculo = res["po"], res["pl"], res["vinculo"]
+        internas, importadas = res["internas"], res["importadas"]
+        if po is None:
+            po_fis = traza_oc.get((pid, slid))
+            po_fisico = pos_por_codigo.get(po_fis) if po_fis else None
+            if po_fisico is not None and not _es_importada(po_fisico) \
+                    and not _es_compra_interna(po_fisico):
+                po = po_fisico
+                pl = next((x for x in lineas_por_codigo.get(po_fis, [])
+                           if _oid(x.get("product_id")) == pid), None)
+                origen_vinculo = "trazabilidad"
+            else:
+                if po_fisico is not None:
+                    if _es_importada(po_fisico):
+                        importadas.append(po_fisico)
+                    else:
+                        internas.append(po_fisico)
+                if importadas:
+                    ocs_imp = ", ".join(sorted({p.get("name") or "" for p in importadas})[:3])
+                    motivo = ("La OC (%s) es una orden de importacion (is_import): no es "
+                              "una compra local, por lo que no se reporta." % ocs_imp)
+                    exclusiones.append({**cand_ref, "motivo": "compra_importada",
+                                        "detalle": motivo})
+                elif internas:
+                    ocs_int = ", ".join(sorted({p.get("name") or "" for p in internas})[:3])
+                    motivo = ("La OC (%s) es una compra interna entre empresas del grupo "
+                              "(MASERVEN): este modulo es solo de FINPAC." % ocs_int)
+                    exclusiones.append({**cand_ref, "motivo": "compra_interna_grupo",
+                                        "detalle": motivo})
+                else:
+                    if ocs:
+                        motivo = ("La OC citada (%s) no es una compra puntual de FINPAC "
+                                  "vinculada a la venta original (es importacion o no "
+                                  "corresponde a esta venta)." % ", ".join(ocs[:3]))
+                    else:
+                        motivo = ("No se encontro una orden de compra puntual vinculada a la "
+                                  "venta original (ni vinculo de compra en las lineas de la "
+                                  "orden de venta ni OC citada en los movimientos).")
+                    exclusiones.append({**cand_ref, "motivo": "sin_compra_puntual",
+                                        "detalle": motivo})
+                continue
 
-        costo_unit = (pl.get("price_unit") if pl and pl.get("price_unit") else None) \
-            or costo_dev.get(m["id"]) or 0.0
-        contacto = (partners.get(_oid(pk.get("partner_id"))) or {}).get("name") \
-            or (partners.get(_oid(so.get("partner_id"))) or {}).get("name") or NO_ID
-        proveedor = (partners.get(_oid(po.get("partner_id"))) or {}).get("name") \
-            or _label(po.get("partner_id")) or NO_ID
+        cliente = _label(so.get("partner_id")) or NO_ID
+        vendedor = _label(so.get("user_id")) or NO_ID
+        proveedor = _label(po.get("partner_id")) or NO_ID
+        fecha_oc = (po.get("date_approve") or po.get("date_order") or "")[:10] or NO_ID
+        costo = pl.get("price_unit") if pl else None
+        if costo is None:
+            costo = 0.0
+        stock_actual = round(prod.get("qty_available") or 0.0, 4)
+        aviso = ""
+        if pendiente > stock_actual + 0.01:
+            aviso = (f"La cantidad pendiente ({pendiente:g} u.) es mayor que el stock "
+                     f"actual del producto ({stock_actual:g} u.): el inventario y los "
+                     f"movimientos de devolucion no cuadran; revise el caso.")
+        # tipo de vinculo: DOC = documental confirmado, TRAZ = deducido por FIFO
+        vinculo_tipo = "TRAZ" if origen_vinculo == "trazabilidad" else "DOC"
+        vinculo_detalle = (VINCULO_TRAZ_TXT if vinculo_tipo == "TRAZ"
+                           else VINCULO_DOC_TXT)
 
         items.append({
-            "move_id": m["id"],
-            "move_ids": g["move_ids"],
-            "contacto": contacto,
-            "orden_venta": so.get("name") or NO_ID,
+            "cliente": cliente,
+            "orden_venta": so_nombre or NO_ID,
             "codigo": prod.get("default_code") or NO_ID,
             "descripcion": prod.get("name") or NO_ID,
-            "cantidad_devuelta": cant_dev,
-            "cantidad_vendida_despues": vendida,
+            "cantidad_devuelta": cant_devuelta,
             "cantidad_pendiente": pendiente,
-            "estado": estado,
-            "stock_nuevo_posterior": tr["stock_nuevo"],
-            "entradas_posteriores": tr["entradas"],
-            "ajustes_entrada_posteriores": tr["ajustes_in"],
-            "ajustes_salida_posteriores": tr["ajustes_out"],
-            "ventas_posteriores": tr["ventas"],
-            "cantidad_estimada": ambiguo,
-            "aviso": aviso,
+            "stock_actual": stock_actual,
             "orden_compra": po.get("name") or NO_ID,
             "proveedor": proveedor,
-            "fecha_oc": (po.get("date_approve") or po.get("date_order") or "")[:10] or NO_ID,
-            "costo_unitario": round(costo_unit or 0.0, 6),
-            "vendedor": vend_nombre or NO_ID,
+            "fecha_oc": fecha_oc,
+            "costo_unitario": round(costo or 0.0, 6),
+            "vendedor": vendedor,
             "producto_id": pid,
             "company_id": company_id,
-            "devolucion_odoo": _link("stock.move", m["id"]),
+            "fecha_devolucion": g["fecha_min"][:10],
+            "moves": g["moves"],
+            "move_id": primer["id"],
+            "vinculo": origen_vinculo,
+            "vinculo_tipo": vinculo_tipo,
+            "vinculo_detalle": vinculo_detalle,
+            "aviso": aviso,
+            "devolucion_odoo": _link("stock.move", primer["id"]),
             "oc_odoo": _link("purchase.order", _oid(po.get("id"))),
         })
 
-    # 4) filtro por vendedor (sobre el resultado ya depurado)
-    if vendedor:
-        v = vendedor.strip().lower()
-        items = [i for i in items if v in (i["vendedor"] or "").lower()]
-
     items.sort(key=lambda i: (i["fecha_oc"], i["codigo"], i["orden_venta"]))
-    return {"ok": True, "empresa": {"id": company_id, "nombre": COMPANY_FINPAC_NOMBRE},
+    data = {"ok": True, "empresa": {"id": company_id, "nombre": COMPANY_FINPAC_NOMBRE},
             "items": items, "total": len(items),
-            "vendedores": sorted(vendedores.keys()),
             "candidatas": candidatas_total,
             "incluidas": len(items),
             "excluidas": len(exclusiones),
             "exclusiones": exclusiones,
-            "mensaje": "" if items else "No se encontraron devoluciones pendientes con los filtros aplicados."}
+            "generado": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            "mensaje": "" if items else "No se encontraron devoluciones pendientes "
+                                         "con los filtros aplicados."}
+    with _lock:
+        _cache_reporte[clave_cache] = (time.time(), data)
+    return data
+
+
+def _delta_movimientos(movs, alm):
+    """Delta de inventario de los movimientos sobre el almacen de la empresa."""
+    d = 0.0
+    for m in movs:
+        clase, _sub = _clasificar(m, alm)
+        q = abs(m.get("quantity") or 0.0)
+        if clase == CLASE_ENTRADA:
+            d += q
+        elif clase == CLASE_SALIDA:
+            d -= q
+    return d
 
 
 # --------------------------------------------------------------------------- #
-# Detalle de movimientos que sustentan un caso (para revision)
+# Traza de movimientos de un caso (para revision)
 # --------------------------------------------------------------------------- #
 def detalle(company_id, move_id):
+    """Movimientos que sustentan un caso de devolucion."""
     company_id = COMPANY_FINPAC
-    mv = _query("stock.move", [("id", "=", move_id), ("company_id", "=", company_id)],
-                ["id", "name", "date", "product_id", "quantity", "picking_id", "sale_line_id"])
+    alm = _almacenes(company_id)
+    mv = _query("stock.move", [("id", "=", move_id)], ["id", "name", "date", "product_id",
+                 "quantity", "picking_id", "sale_line_id"])
     if not mv:
         return {"ok": False, "mensaje": "Caso no encontrado."}
     m = mv[0]
     pid = _oid(m.get("product_id"))
-    locs_usage = _ubicaciones_virtuales(company_id)
-    movs = _query("stock.move",
-                  [("company_id", "=", company_id), ("product_id", "=", pid), ("state", "=", "done")],
-                  ["id", "name", "date", "quantity", "picking_type_id", "picking_id",
-                   "sale_line_id", "location_id", "location_dest_id", "is_inventory",
-                   "reference"], order="date asc, id asc")
-    picks = _bulk("stock.picking", [_oid(x.get("picking_id")) for x in movs],
-                  ["id", "name", "partner_id"])
-    types = {t["id"]: t for t in _query("stock.picking.type", [], ["id", "sequence_code", "code"])}
-    etiquetas = {
-        "venta": "Salida / Venta", "entrada": "Entrada / Compra o ajuste (+)",
-        "salida_ajuste": "Ajuste de inventario (\u2212) / desecho / producci\u00f3n",
-        "devolucion_cliente": "Devoluci\u00f3n de cliente", "interno": "Reubicaci\u00f3n interna",
-        "otro": "Otro movimiento",
-    }
+    movs = _movimientos(company_id, [pid], completo=True).get(pid, [])
+    stock = _stock_vivo(company_id, [pid], alm).get(pid, 0.0)
+    inicial = stock - _delta_movimientos(movs, alm)
+    pendientes, _consumo = _rastreo(movs, alm, inicial)
+    etiquetas = {"traslado": "Traslado interno (no es venta)",
+                 "venta": "Venta / entrega a cliente",
+                 "ajuste_negativo": "Ajuste de inventario (-)",
+                 "ajuste_positivo": "Ajuste de inventario (+)",
+                 "devolucion_proveedor": "Devolucion a proveedor",
+                 "traspaso": "Traspaso a otra empresa",
+                 "traspaso_entrada": "Ingreso por traspaso",
+                 "compra": "Recepcion de compra",
+                 "devolucion": "Devolucion de cliente",
+                 "entrada": "Entrada", "salida": "Salida", "externo": "Fuera de la empresa"}
     filas = []
     for x in movs:
-        pt = types.get(_oid(x.get("picking_type_id"))) or {}
-        clase = _clasificar_movimiento(x, locs_usage)
+        clase, sub = _clasificar(x, alm)
         filas.append({
-            "fecha": x["date"], "nombre": x["name"],
-            "documento": (picks.get(_oid(x.get("picking_id"))) or {}).get("name") or "",
-            "tipo": pt.get("sequence_code") or ("Ajuste/Interno" if not pt else pt.get("code")),
-            "clase": clase,
-            "clase_etiqueta": etiquetas.get(clase, clase),
-            "es_salida": clase == "venta",
-            "es_devolucion": clase == "devolucion_cliente",
-            "cantidad": round(x.get("quantity") or 0.0, 4),
-            "sale_line": _oid(x.get("sale_line_id")),
+            "fecha": x["date"], "nombre": x["name"], "cantidad": round(x.get("quantity") or 0.0, 4),
+            "tipo": etiquetas.get(sub, sub),
+            "origen": _label(x.get("origin")) or (x.get("origin") or ""),
+            "pendiente": round(pendientes.get(x["id"], 0.0), 4) if sub == "devolucion" else None,
         })
-    return {"ok": True, "producto_id": pid,
+    return {"ok": True, "producto_id": pid, "stock_actual": round(stock, 4),
+            "stock_inicial_no_trazado": round(inicial, 4),
             "devolucion": {"id": m["id"], "nombre": m["name"], "fecha": m["date"][:10],
                            "cantidad": round(m.get("quantity") or 0.0, 4)},
             "movimientos": filas}
 
 
 # --------------------------------------------------------------------------- #
-# Exportacion a Excel (mismas columnas del reporte)
+# Exportacion a Excel
 # --------------------------------------------------------------------------- #
 def build_xlsx(data):
     from openpyxl import Workbook
+    from openpyxl.comments import Comment
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
 
@@ -695,16 +793,15 @@ def build_xlsx(data):
     thin = Side(style="thin", color="CBD5E1")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    ws["A1"] = ("DEVOLUCIONES PENDIENTES DE COMPRAS LOCALES \u2014 "
+    ws["A1"] = ("DEVOLUCIONES PENDIENTES DE COMPRAS PUNTUALES \u2014 "
                 f"{data['empresa']['nombre']}")
     ws["A1"].font = Font(bold=True, size=14, color="0F172A")
     ws["A2"] = f"Generado: {datetime.now():%d/%m/%Y %H:%M}"
     ws["A2"].font = Font(size=10, color="64748B")
 
-    headers = ["CONTACTO", "ORDEN DE VENTA", "C\u00d3DIGO", "DESCRIPCI\u00d3N",
-               "CANTIDAD DEVUELTA", "CANTIDAD VENDIDA DESPU\u00c9S", "CANTIDAD PENDIENTE",
-               "ESTADO", "ORDEN DE COMPRA", "PROVEEDOR", "FECHA DE O/C",
-               "COSTO UNIT.", "VENDEDOR"]
+    headers = ["CLIENTE", "ORDEN DE VENTA ORIGINAL", "C\u00d3DIGO", "DESCRIPCI\u00d3N",
+               "CANTIDAD DEVUELTA", "CANTIDAD PENDIENTE", "STOCK ACTUAL", "ORDEN DE COMPRA",
+               "PROVEEDOR", "FECHA DE O/C", "COSTO UNITARIO", "VENDEDOR"]
     head_row = 4
     for c, h in enumerate(headers, start=1):
         cell = ws.cell(row=head_row, column=c, value=h)
@@ -716,49 +813,78 @@ def build_xlsx(data):
     r = head_row
     for it in data["items"]:
         r += 1
-        vals = [it["contacto"], it["orden_venta"], it["codigo"], it["descripcion"],
-                it["cantidad_devuelta"], it["cantidad_vendida_despues"], it["cantidad_pendiente"],
-                it["estado"], it["orden_compra"], it["proveedor"], it["fecha_oc"],
+        vals = [it["cliente"], it["orden_venta"], it["codigo"], it["descripcion"],
+                it["cantidad_devuelta"], it["cantidad_pendiente"], it["stock_actual"],
+                it["orden_compra"], it["proveedor"], it["fecha_oc"],
                 it["costo_unitario"], it["vendedor"]]
         for c, v in enumerate(vals, start=1):
             cell = ws.cell(row=r, column=c, value=v)
             cell.border = border
-            cell.alignment = Alignment(vertical="top", wrap_text=(c in (1, 4, 10)))
+            cell.alignment = Alignment(vertical="top", wrap_text=(c in (1, 4, 9)))
             if c in (5, 6, 7):
                 cell.number_format = "#,##0.00"
-            if c == 8:
-                cell.alignment = Alignment(vertical="top", horizontal="center")
-            if c == 12:
+            if c == 11:
                 cell.number_format = '"$"#,##0.000000'
-            if it.get("cantidad_estimada"):
-                cell.fill = PatternFill("solid", fgColor="FFFBEB")
+            if r % 2 == 0:
+                cell.fill = PatternFill("solid", fgColor="F8FAFC")
+        # vinculo de la OC y avisos (comentarios: el cuadro mantiene las 12 columnas)
+        es_traz = it.get("vinculo_tipo") == "TRAZ" or it.get("vinculo") == "trazabilidad"
+        vinculo = (it.get("vinculo_detalle") or
+                   ("Trazabilidad FIFO: la OC se dedujo de la capa de stock que surtio la "
+                    "entrega al cliente que devuelve."
+                    if es_traz else
+                    "Vinculo documental: la orden de venta original apunta a esta OC "
+                    "(compra puntual de FINPAC)."))
+        ws.cell(row=r, column=8).comment = Comment(vinculo, "Devoluciones pendientes")
+        if es_traz:
+            # se distingue a simple vista el vinculo deducido del documental
+            celda = ws.cell(row=r, column=8)
+            celda.fill = PatternFill("solid", fgColor="FEF3C7")
+            celda.font = Font(bold=True, color="92400E", size=11)
+        if it.get("aviso"):
+            ws.cell(row=r, column=6).comment = Comment(it["aviso"], "Devoluciones pendientes")
+            for c in range(1, 13):
+                ws.cell(row=r, column=c).fill = PatternFill("solid", fgColor="FFF7ED")
 
     if not data["items"]:
-        ws.cell(row=head_row + 1, column=1, value="Sin devoluciones pendientes en el rango indicado.")
+        ws.cell(row=head_row + 1, column=1,
+                value="Sin devoluciones pendientes de compras puntuales en el rango indicado.")
 
-    widths = [26, 14, 12, 40, 14, 18, 16, 20, 16, 28, 12, 13, 30]
+    widths = [30, 20, 12, 40, 16, 16, 13, 16, 32, 12, 14, 28]
     for c, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(c)].width = w
     ws.freeze_panes = ws.cell(row=head_row + 1, column=1)
     if data["items"]:
-        ws.auto_filter.ref = f"A{head_row}:M{head_row + len(data['items'])}"
+        ws.auto_filter.ref = f"A{head_row}:L{head_row + len(data['items'])}"
     ws.row_dimensions[head_row].height = 30
 
     nr = head_row + len(data["items"]) + 3
     ws.cell(row=nr, column=1, value="NOTAS").font = Font(bold=True, size=11)
     notas = [
-        "Solo compras locales / puntuales de FINPAC. Se excluyen las compras de importaci\u00f3n.",
-        "CANTIDAD DEVUELTA: unidades que devolvi\u00f3 originalmente el cliente (movimientos DEVCL).",
-        "CANTIDAD VENDIDA DESPU\u00c9S: unidades de la devoluci\u00f3n que salieron a cliente despu\u00e9s "
-        "de la devoluci\u00f3n (rastreo cronol\u00f3gico de movimientos).",
-        "CANTIDAD PENDIENTE: unidades de la devoluci\u00f3n que siguen en inventario (devuelta \u2212 vendida). "
-        "No es el stock total del producto.",
-        "ESTADO: PENDIENTE (nada vendido), PARCIALMENTE VENDIDO o VENDIDO COMPLETAMENTE (excluido del reporte).",
-        "Las filas resaltadas tuvieron stock nuevo posterior (compras o ajustes del mismo c\u00f3digo): "
-        "la cantidad pendiente es una estimaci\u00f3n por asignaci\u00f3n FIFO, no certeza f\u00edsica de las mismas unidades.",
-        "Las transferencias internas no alteran la disponibilidad y no se imputan a la devoluci\u00f3n.",
-        "El vendedor proviene de la orden de venta original de la devoluci\u00f3n.",
-        "Este m\u00f3dulo no genera cobros ni modifica el ERP.",
+        f"Modulo exclusivo de {data['empresa']['nombre']}: solo compras puntuales/locales "
+        "vinculadas a la orden de venta original de la devolucion.",
+        "No se incluyen las compras internas con MASERVEN (traspasos entre empresas del "
+        "grupo): este reporte es solo de FINPAC.",
+        "CLIENTE: de la orden de venta original. VENDEDOR: de la orden de venta original.",
+        "CANTIDAD DEVUELTA: unidades devueltas por el cliente en el rango indicado.",
+        "CANTIDAD PENDIENTE: unidades devueltas que siguen en inventario. Se calcula con "
+        "trazabilidad cronologica FIFO por capas sobre los movimientos reales: las salidas "
+        "(ventas, ajustes, devoluciones a proveedor) consumen primero las unidades mas "
+        "antiguas, de modo que las unidades devueltas se descuentan cuando otro vendedor "
+        "las vende. Los traslados internos no son ventas.",
+        "STOCK ACTUAL: stock total del producto en el ERP (no es el stock de la devolucion).",
+        "ORDEN DE COMPRA: la OC de FINPAC que surtio el producto. En el comentario de la "
+        "celda se indica el vinculo: documental (la orden de venta apunta a la OC) o por "
+        "trazabilidad FIFO (la OC se dedujo de la capa que entrego las unidades). Las OCs "
+        "con vinculo por trazabilidad FIFO van resaltadas en ambar.",
+        "Las ordenes de compra marcadas como importacion (is_import) no se reportan: este "
+        "modulo es de compras puntuales/locales.",
+        "Las compras posteriores del mismo codigo abren capas nuevas: ese stock no se "
+        "atribuye a la devolucion original.",
+        "Si Odoo no permite identificar fisicamente las mismas unidades, la cantidad "
+        "pendiente es el resultado de la trazabilidad cronologica descrita, no una "
+        "certificacion fisica de unidades.",
+        "Este modulo no genera cobros ni modifica el ERP.",
     ]
     for i, n in enumerate(notas, start=1):
         ws.cell(row=nr + i, column=1, value=f"{i}. {n}")

@@ -67,18 +67,22 @@
   .kpi span{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
   .kpi strong{font-size:20px;display:block;margin:2px 0}
   .kpi small{font-size:11px;color:var(--muted)}
-  .tablebox{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:68vh}
-  table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
-  thead th{position:sticky;top:0;background:#0f172a;color:#fff;text-align:left;padding:10px 12px;font-size:11px;
-           text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;cursor:pointer}
-  thead th:hover{background:#1e293b}
-  tbody td{padding:8px 12px;border-top:1px solid var(--line);white-space:nowrap}
-  tbody tr:nth-child(even){background:#f8fafc}
-  tbody tr:hover{background:#e0e7ff}
-  td.num{text-align:right;font-variant-numeric:tabular-nums}
-  td.doc{font-family:Consolas,Menlo,monospace;font-size:12px}
-  td.wrap{white-space:normal;max-width:440px}
-  .tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+   .tablebox{background:#fff;border:1px solid var(--line);border-radius:12px;overflow-x:auto;overflow-y:auto;max-height:68vh}
+   table{border-collapse:separate;border-spacing:0;table-layout:fixed;width:100%;font-size:13px}
+   thead th{position:sticky;top:0;background:#0f172a;color:#fff;text-align:left;padding:10px 16px;font-size:11px;
+            text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;cursor:pointer;line-height:1.2;position:relative;user-select:none}
+   thead th:hover{background:#1e293b}
+   thead th .th-label{display:inline-block;padding-right:14px}
+   thead th .resizer{position:absolute;right:0;top:4px;height:calc(100% - 8px);width:8px;cursor:col-resize;user-select:none;touch-action:none}
+   thead th .resizer:hover,.thead th.resizing .resizer{background:rgba(255,255,255,.35)}
+   thead th.resizing{background:#1e293b}
+   tbody td{padding:10px 16px;border-top:1px solid var(--line);white-space:nowrap;vertical-align:top;overflow:hidden;text-overflow:ellipsis}
+   tbody tr:nth-child(even){background:#f8fafc}
+   tbody tr:hover{background:#e0e7ff}
+   td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+   td.doc{font-family:Consolas,Menlo,monospace;font-size:12px;white-space:nowrap}
+   td.wrap{white-space:normal;word-break:normal;overflow-wrap:break-word;hyphens:auto;min-width:320px;max-width:none;overflow:visible;text-overflow:unset}
+   td.wrap small.usr{display:block;color:#64748b;font-size:11px;margin-top:3px;line-height:1.25}
   .tag.in{background:var(--inbg);color:var(--in);border:1px solid #a7f3d0}
   .tag.out{background:var(--outbg);color:var(--out);border:1px solid #fecaca}
   .tag.adj{background:var(--adjbg);color:var(--adj);border:1px solid #fde68a}
@@ -95,7 +99,7 @@
   .sw input:checked + i::after{transform:translateX(18px)}
   .sw input:focus-visible + i{outline:3px solid rgba(56,189,248,.5);outline-offset:2px}
   .sw span{font-size:12px;color:var(--muted);text-transform:none;letter-spacing:0}
-  tfoot td{padding:10px 12px;font-weight:700;background:#e2e8f0;border-top:2px solid #94a3b8;white-space:nowrap}
+   tfoot td{padding:10px 16px;font-weight:700;background:#e2e8f0;border-top:2px solid #94a3b8;white-space:nowrap}
   .empty{padding:26px;text-align:center;color:var(--muted);font-size:14px;background:#fff;
          border:1px solid var(--line);border-radius:12px}
   .notes{font-size:12.5px;color:#334155}
@@ -105,6 +109,16 @@
   .spin{display:inline-block;width:13px;height:13px;border:2px solid #c7d2fe;border-top-color:var(--brand);
         border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px}
   @keyframes sp{to{transform:rotate(360deg)}}
+
+  /* ===== Panel de sincronizacion y conciliacion ===== */
+  .kpi.ok strong{color:#047857}
+  .kpi.bad strong{color:#b91c1c}
+  .conc ul{margin:8px 0 0 18px;font-size:12.5px;color:#475569}
+  .conc ul li{margin:3px 0}
+  table.mini{width:auto;max-width:640px;margin-top:10px;border-collapse:collapse;font-size:12.5px}
+  table.mini th,table.mini td{border:1px solid var(--line);padding:4px 9px;text-align:left}
+  table.mini th{background:#f1f5f9;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
+  table.mini td.num{text-align:right;font-variant-numeric:tabular-nums}
 
   /* ===== Tablero de despachos: KPIs, gráfico por responsable y tabla ===== */
   .kpi.pk strong{color:#1d4ed8}
@@ -172,7 +186,7 @@
   </div>
   <nav class="side-nav">
     <a href="/despacho" class="sn" id="navDespacho"><span class="ic">📦</span>Despacho</a>
-    <a href="/devoluciones" class="sn" id="navDevoluciones"><span class="ic">↩️</span>Devoluciones</a>
+    <a href="/devoluciones" class="sn" id="navDevoluciones"><span class="ic">↩️</span>Devoluciones pendientes</a>
     <a href="/" class="sn on" id="navKardex"><span class="ic">🗂️</span>Kardex</a>
     <a href="/permisos" class="sn" id="navPermisos" style="display:none"><span class="ic">🔒</span>Permisos</a>
     <a href="/configuracion" class="sn" id="navConfig" style="display:none"><span class="ic">⚙️</span>Configuraci&oacute;n</a>
@@ -212,12 +226,19 @@
       <button class="green" id="btnLoad" disabled>Generar Kardex</button>
       <button class="ghost" id="btnXlsx" disabled>Descargar Excel</button>
       <button class="ghost" id="btnCsv" disabled>Descargar CSV</button>
+      <button class="ghost" id="btnSync" disabled>Sincronizar ahora</button>
       <span id="status"></span>
     </div>
     <div class="chosen" id="chosen">Seleccione un \u00edtem del buscador.</div>
+    <div class="chosen" id="syncInfo">Sincronizaci\u00f3n: verificando estado...</div>
   </section>
 
   <section class="kpis" id="kpis" style="display:none"></section>
+
+  <section class="card conc" id="concCard" style="display:none">
+    <h3>Conciliaci\u00f3n contra el stock f\u00edsico de Odoo</h3>
+    <div id="concBody"></div>
+  </section>
 
   <section class="card" id="filters" style="display:none">
     <h3>Filtros del kardex</h3>
@@ -261,7 +282,11 @@ const fmtQ = n => (Math.abs(n - Math.round(n)) < 0.005)
 const fmtM = n => "$" + Number(n).toLocaleString("es-EC", {minimumFractionDigits:2, maximumFractionDigits:2});
 const d2 = s => s.slice(0,10).split("-").reverse().join("/");
 const TAG = {"Ingreso (Importaci\u00f3n)":"in","Ingreso (Recepci\u00f3n)":"in","Devoluci\u00f3n de cliente":"adj",
-             "Venta (Despacho)":"out","Devoluci\u00f3n a proveedor":"adj","Ajuste de inventario":"adj"};
+             "Venta (Despacho)":"out","Devoluci\u00f3n a proveedor":"adj","Ajuste de inventario":"adj",
+             "Traspaso hacia almac\u00e9n":"adj","Traspaso desde almac\u00e9n":"adj",
+             "Traspaso entre empresas":"adj","Producci\u00f3n (producto terminado)":"adj",
+             "Producci\u00f3n (consumo de material)":"adj","Movimiento de vista":"adj",
+             "Entrada de inventario":"in","Salida de inventario":"out"};
 
 let STATE = {company:null, product:null, data:null, rows:[], sort:{k:"fecha", dir:1}, showInternals:false};
 let USUARIO = null;
@@ -345,7 +370,7 @@ async function load() {
   $("#status").innerHTML = '<span class="spin"></span>Consultando movimientos en el ERP...';
   $("#btnXlsx").disabled = $("#btnCsv").disabled = true;
   try {
-    const d = await api("/api/kardex", {company_id: STATE.company, product_id: STATE.product.id});
+    const d = await api("/api/kardex", {company_id: STATE.company, product_id: STATE.product.id, refresh: 1});
     STATE.data = d;
     if (!d.ok) {
       $("#kpis").style.display = "none"; $("#filters").style.display = "none"; $("#notesCard").style.display = "none";
@@ -377,15 +402,18 @@ async function load() {
 
 function pasaFiltro(r, a, b, t, q) {
   return (!a || r.date.slice(0,10) >= a) && (!b || r.date.slice(0,10) <= b) &&
-         (!t || r.tipo === t) && (!q || (r.doc + " " + r.origen + " " + r.tipo).toLowerCase().includes(q));
+         (!t || r.tipo === t) && (!q || (r.doc + " " + r.origen + " " + r.tipo + " " +
+                                       (r.usuario || "")).toLowerCase().includes(q));
 }
 
 function normInternal(i) {
-  const donde = [i.ubicacion, i.origen].filter(Boolean).join(" \u2192 ");
-  return {date: i.date, tipo: "Transferencia interna", codTipo: i.tipo, doc: i.doc || "\u2014",
+  const donde = [i.ubicacion, i.origen].filter(Boolean).join(" → ");
+  return {date: i.date, tipo: "Transferencia interna", codTipo: i.tipo, doc: i.doc || "—",
           origen: donde + (i.cantidad ? ` (${fmtQ(i.cantidad)} u)` : ""),
+          usuario: i.usuario || "",
           entrada: 0, salida: 0, cost: 0, saldo: null, valor_total: null, interno: true};
 }
+
 
 function filtered() {
   const d = STATE.data; if (!d) return [];
@@ -414,17 +442,20 @@ function tiposDisponibles(d) {
 
 function render() {
   const d = STATE.data, k = d.kpi;
+  const uni = d.producto.unidad || "u";
   const notaInt = STATE.showInternals
-    ? `${k.internos} transf. internas visibles en gris (${fmtQ(k.internos_qty)} u)`
-    : `${k.internos} transf. internas omitidas (${fmtQ(k.internos_qty)} u)`;
+    ? `${k.internos} transf. internas visibles en gris (${fmtQ(k.internos_qty)} ${uni})`
+    : `${k.internos} transf. internas omitidas (${fmtQ(k.internos_qty)} ${uni})`;
   $("#kpis").innerHTML = [
-    ["Entradas totales", fmtQ(k.entradas) + " u", "ingresos, devoluciones y ajustes"],
-    ["Salidas totales", fmtQ(k.salidas) + " u", "despachos y devoluciones a proveedor"],
-    ["Saldo actual", fmtQ(k.saldo) + " u", d.empresa.nombre],
+    ["Entradas totales", fmtQ(k.entradas) + " " + uni, "ingresos, devoluciones y ajustes"],
+    ["Salidas totales", fmtQ(k.salidas) + " " + uni, "despachos y devoluciones a proveedor"],
+    ["Saldo actual", fmtQ(k.saldo) + " " + uni, d.empresa.nombre],
     ["Valoraci\u00f3n del saldo", fmtM(k.valor), "saldo \u00d7 costo promedio"],
     ["Costo promedio", k.costo_prom ? fmtM(k.costo_prom) : "n/a", d.producto.metodo],
     ["Movimientos", fmtQ(k.movimientos), notaInt],
   ].map(([t,v,s]) => `<div class="kpi"><span>${t}</span><strong>${v}</strong><small>${s}</small></div>`).join("");
+
+  renderConciliacion(d);
 
   let rows = filtered().slice();
   const {k:key, dir} = STATE.sort;
@@ -441,16 +472,16 @@ function render() {
       <td>${d2(r.date)}</td>
       <td><span class="tag int" title="${r.codTipo || ""}">${r.tipo}</span></td>
       <td class="doc">${r.doc}</td>
-      <td class="wrap">${r.origen}</td>
-      <td class="num">\u2013</td><td class="num">\u2013</td><td class="num">N/A</td>
-      <td class="num">\u2013</td><td class="num">\u2013</td></tr>`
+      <td class="wrap">${r.origen}${r.usuario ? `<br><small class="usr">Realizado por: ${esc(r.usuario)}</small>` : ""}</td>
+      <td class="num">–</td><td class="num">–</td><td class="num">N/A</td>
+      <td class="num">–</td><td class="num">–</td></tr>`
     : `<tr>
       <td>${d2(r.date)}</td>
       <td><span class="tag ${TAG[r.tipo]||"adj"}">${r.tipo}</span></td>
       <td class="doc">${r.doc}</td>
-      <td class="wrap">${r.origen}</td>
-      <td class="num">${r.entrada ? fmtQ(r.entrada) : "\u2013"}</td>
-      <td class="num">${r.salida ? fmtQ(r.salida) : "\u2013"}</td>
+      <td class="wrap">${r.origen}${r.usuario ? `<br><small class="usr">Realizado por: ${esc(r.usuario)}</small>` : ""}</td>
+      <td class="num">${r.entrada ? fmtQ(r.entrada) : "–"}</td>
+      <td class="num">${r.salida ? fmtQ(r.salida) : "–"}</td>
       <td class="num">${r.cost ? fmtM(r.cost) : "N/A"}</td>
       <td class="num"><b>${fmtQ(r.saldo)}</b></td>
       <td class="num">${fmtM(r.valor_total)}</td></tr>`).join("");
@@ -460,24 +491,98 @@ function render() {
   const cols = ["Fecha","Tipo Mvto.","Num. Doc.","Origen / Destino","Entradas","Salidas","Costo Unit.","Saldo","Valor Total Saldo"];
   const keys = ["fecha","tipo","doc","origen","ent","sal","cost","saldo","valor"];
   const resumen = `${krows.length} movimientos` + (nInt ? ` + ${nInt} internas` : "");
-  $("#tableHost").innerHTML = `<div class="tablebox"><table>
-    <thead><tr>${cols.map((c,i) => `<th data-k="${keys[i]}">${c}${STATE.sort.k===keys[i]?(dir>0?" \u25b2":" \u25bc"):""}</th>`).join("")}</tr></thead>
-    <tbody>${body || `<tr><td colspan="9" style="text-align:center;padding:24px;color:#64748b">Sin resultados para los filtros aplicados.</td></tr>`}</tbody>
-    <tfoot><tr><td>TOTALES</td><td></td><td></td><td>${resumen} filtrados</td>
-      <td class="num">${fmtQ(krows.reduce((s,r)=>s+r.entrada,0))}</td>
-      <td class="num">${fmtQ(krows.reduce((s,r)=>s+r.salida,0))}</td>
-      <td></td>
-      <td class="num">${last?fmtQ(last.saldo):0}</td>
-      <td class="num">${last?fmtM(last.valor_total):fmtM(0)}</td></tr></tfoot></table></div>`;
+   $("#tableHost").innerHTML = `<div class="tablebox"><table>
+     <thead><tr>${cols.map((c,i) => `<th data-k="${keys[i]}"><span class="th-label">${c}</span><span class="resizer"></span></th>`).join("")}</tr></thead>
+     <tbody>${body || `<tr><td colspan="9" style="text-align:center;padding:24px;color:#64748b">Sin resultados para los filtros aplicados.</td></tr>`}</tbody>
+     <tfoot><tr><td>TOTALES</td><td></td><td></td><td>${resumen} filtrados</td>
+       <td class="num">${fmtQ(krows.reduce((s,r)=>s+r.entrada,0))}</td>
+       <td class="num">${fmtQ(krows.reduce((s,r)=>s+r.salida,0))}</td>
+       <td></td>
+       <td class="num">${last?fmtQ(last.saldo):0}</td>
+       <td class="num">${last?fmtM(last.valor_total):fmtM(0)}</td></tr></tfoot></table></div>`;
 
-  $("#tableHost table").addEventListener("click", e => {
-    const th = e.target.closest("th"); if (!th) return;
-    const k2 = th.dataset.k;
-    STATE.sort = {k:k2, dir: STATE.sort.k === k2 ? -STATE.sort.dir : 1};
-    render();
-  });
+   const table = $("#tableHost table");
+   table.addEventListener("click", e => {
+     const resizer = e.target.closest(".resizer"); if (resizer) return;
+     const th = e.target.closest("th"); if (!th) return;
+     const k2 = th.dataset.k;
+     if (!k2) return;
+     STATE.sort = {k:k2, dir: STATE.sort.k === k2 ? -STATE.sort.dir : 1};
+     render();
+   });
+
+   table.querySelectorAll("thead th").forEach(th => {
+     const resizer = th.querySelector(".resizer"); if (!resizer) return;
+     let startX, startWidth, col;
+     resizer.addEventListener("mousedown", e => {
+       e.preventDefault(); e.stopPropagation();
+       const cells = table.querySelectorAll(`tr th:nth-child(${Array.from(th.parentNode.children).indexOf(th)+1}), tr td:nth-child(${Array.from(th.parentNode.children).indexOf(th)+1})`);
+       startX = e.pageX;
+       startWidth = th.getBoundingClientRect().width;
+       col = Array.from(th.parentNode.children).indexOf(th);
+       th.classList.add("resizing");
+       document.body.style.cursor = "col-resize";
+       document.body.style.userSelect = "none";
+       function onMove(ev) {
+         const newWidth = Math.max(80, startWidth + (ev.pageX - startX));
+         table.querySelectorAll(`tr > *:nth-child(${col+1})`).forEach(el => {
+           el.style.width = newWidth + "px";
+           el.style.minWidth = newWidth + "px";
+           el.style.maxWidth = newWidth + "px";
+         });
+       }
+       function onUp() {
+         document.removeEventListener("mousemove", onMove);
+         document.removeEventListener("mouseup", onUp);
+         th.classList.remove("resizing");
+         document.body.style.cursor = "";
+         document.body.style.userSelect = "";
+       }
+       document.addEventListener("mousemove", onMove);
+       document.addEventListener("mouseup", onUp);
+     });
+   });
   $("#count").textContent = `${krows.length} de ${d.rows.length} movimientos` +
     (nInt ? ` \u00b7 ${nInt} internas` : "");
+}
+
+function renderConciliacion(d) {
+  const c = d.conciliacion;
+  if (!c) { $("#concCard").style.display = "none"; return; }
+  $("#concCard").style.display = "block";
+  const uni = d.producto.unidad || "u";
+  const ok = c.estado === "conciliado";
+  const causal = (c.posibles_causas || []).map(x => `<li>${esc(x)}</li>`).join("");
+  const tabla = (c.detalle_quants || []).map(q =>
+    `<tr><td>${esc(q.ubicacion)}</td><td class="num">${fmtQ(q.cantidad)}</td>` +
+    `<td class="num">${fmtQ(q.reservado)}</td></tr>`).join("");
+  $("#concBody").innerHTML = `
+    <div class="row">
+      <div class="kpi ${ok ? "ok" : "tot"}"><span>Stock f\u00edsico en Odoo</span>
+        <strong>${fmtQ(c.stock_odoo)} ${uni}</strong><small>quants del alcance</small></div>
+      <div class="kpi"><span>Saldo del kardex</span>
+        <strong>${fmtQ(c.stock_kardex)} ${uni}</strong><small>por movimientos completados</small></div>
+      <div class="kpi ${ok ? "ok" : "bad"}"><span>Diferencia</span>
+        <strong>${fmtQ(c.diferencia)} ${uni}</strong><small>${ok ? "conciliado" : "revisar"}</small></div>
+    </div>
+    ${causal ? `<ul>${causal}</ul>` : ""}
+    ${tabla ? `<table class="mini"><thead><tr><th>Ubicaci\u00f3n</th><th>Existencia</th>` +
+              `<th>Reservado</th></tr></thead><tbody>${tabla}</tbody></table>` : ""}`;
+}
+
+function renderSync(s) {
+  if (!s) return;
+  const st = s.estado || "inactivo";
+  const icon = st === "sincronizando" ? "\u25cf" : (st === "error" ? "\u26a0" : "\u2713");
+  const ult = s.ultima_sincronizacion ? s.ultima_sincronizacion.replace("T", " ") : "n/d";
+  $("#syncInfo").innerHTML = `Sincronizaci\u00f3n con Odoo: ${icon} <b>${st}</b>` +
+    ` \u00b7 intervalo ${s.intervalo_seg}s \u00b7 \u00faltima: ${ult}` +
+    (s.error ? ` \u00b7 <span style="color:#b91c1c">${esc(s.error)}</span>` : "");
+}
+
+async function cargarSync() {
+  try { renderSync(await api("/api/sync/estado", {})); }
+  catch (e) { $("#syncInfo").textContent = "Sincronizaci\u00f3n: estado no disponible (" + e.message + ")"; }
 }
 
 function dl(url) {
@@ -516,6 +621,20 @@ $("#selCompany").addEventListener("change", () => {
 $("#btnLoad").onclick = load;
 $("#btnXlsx").onclick = () => dl(exportUrl("/api/export"));
 $("#btnCsv").onclick = () => dl(exportUrl("/api/export/csv"));
+$("#btnSync").onclick = async () => {
+  const b = $("#btnSync"); b.disabled = true;
+  b.textContent = "Sincronizando...";
+  try {
+    const r = await fetch("/api/sync/sincronizar", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({completo: false})
+    });
+    const j = await r.json();
+    $("#status").textContent = j.mensaje || (j.ok ? "Sincronizacion iniciada" : "No se pudo iniciar");
+    await cargarSync();
+  } catch (e) { $("#status").textContent = "Error: " + e.message; }
+  finally { b.disabled = false; b.textContent = "Sincronizar ahora"; cargarSync(); }
+};
 ["fType","fText"].forEach(id => $("#"+id).addEventListener("input", render));
 ["fFrom","fTo"].forEach(id => $("#"+id).addEventListener("input", () => { actualizarRango(); render(); }));
 $("#btnTodas").onclick = () => {
@@ -557,6 +676,8 @@ $("#btnReset").onclick = () => {
   $("#fType").value = ""; $("#fText").value = "";
   actualizarRango(); render();
 };
+cargarSync();
+setInterval(cargarSync, 30000);
 init().catch(e => $("#status").textContent = "Error: " + e.message);
 </script>
 </body>

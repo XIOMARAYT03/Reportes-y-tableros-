@@ -90,6 +90,11 @@ odoo_url=https://erp.suempresa.com
 odoo_db=nombre_de_la_base
 odoo_username=usuario.servicio@suempresa.com
 odoo_password=clave_de_servicio
+
+# Sincronizacion local del kardex (opcional)
+KARDEX_SYNC_INTERVALO_SEG=60
+KARDEX_REDONDEO=HALF-UP
+# KARDEX_DB=C:\Kardex-ERP\inventario.db
 ```
 
 Tras editar, reinicie el servicio:
@@ -101,6 +106,38 @@ schtasks /Run    /TN KardexERP
 
 > El `.env` contiene credenciales. Restrinja el acceso NTFS a ese archivo.
 > Si prefiere guardarlo fuera de la carpeta de la app, use `-EnvPath` al instalar.
+
+---
+
+## 5.b Sincronizacion con el ERP (espejo local)
+
+Al arrancar, el servidor levanta un **hilo de sincronizacion** que descarga de
+forma incremental, a una base SQLite local (`app\inventario.db`), los movimientos
+completados (`stock.move`), sus capas de valorizacion (`stock.valuation.layer`) y
+los quants (`stock.quant`). El reporte se arma desde ese espejo, de modo que la
+latencia del ERP no afecta la consulta.
+
+| Aspecto                | Comportamiento                                                        |
+|------------------------|-----------------------------------------------------------------------|
+| Intervalo por defecto  | 60 s (`KARDEX_SYNC_INTERVALO_SEG`); `0` desactiva el servicio.         |
+| Mecanismo              | **Sondeo periodico.** El bus de notificaciones de Odoo se verifica al   |
+|                        | arrancar y, si la instalacion no lo expone, el servicio sigue con      |
+|                        | sondeo. El estado real se muestra en el panel web.                     |
+| Incremental            | Marca de agua `(write_date, id)`: cada ciclo solo trae lo nuevo o     |
+|                        | modificado; el historico no se vuelve a descargar.                     |
+| Idempotencia           | Clave primaria = id de Odoo; `INSERT ... ON CONFLICT DO UPDATE`.       |
+| Recuperacion           | Si el ERP falla, la marca de agua no avanza: el siguiente ciclo        |
+|                        | reintenta la pagina pendiente.                                        |
+| Primera carga          | El historico completo (~300.000 movimientos) tarda entre 6 y 17        |
+|                        | minutos; se hace en segundo plano y el reporte sigue disponible        |
+|                        | consultando el ERP mientras tanto.                                     |
+| Estado                 | `GET /api/sync/estado`, `GET /api/sync/errores` y el panel web.        |
+| Sincronizacion manual  | Boton *Sincronizar ahora* (POST `/api/sync/sincronizar`); la carga      |
+|                        | completa se restringe a usuarios administradores.                      |
+| Copias de seguridad    | `app\inventario.db` se puede borrar: se reconstruye desde el ERP.      |
+
+La base del espejo no contiene datos sensibles de negocio (movimientos y
+existencias); las credenciales siguen living unicamente en el `.env`.
 
 ---
 
@@ -154,6 +191,9 @@ powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
 | `KARDEX_HOST`      | Interfaz de escucha                        | `0.0.0.0`                    |
 | `KARDEX_PORT`      | Puerto                                     | `8765`                       |
 | `KARDEX_ENV_PATH`  | Ruta del `.env` con credenciales de Odoo   | `.env` junto a la app        |
+| `KARDEX_SYNC_INTERVALO_SEG` | Intervalo del sondeo al ERP (0 = desactiva) | `60`                 |
+| `KARDEX_DB`        | Ruta del espejo local (SQLite)             | `app\inventario.db`          |
+| `KARDEX_REDONDEO`  | Redondeo al convertir unidades: `HALF-UP`, `UP`, `DOWN` | `HALF-UP`     |
 
 ---
 
@@ -166,6 +206,10 @@ powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
 | *No se pudo autenticar contra el ERP*     | Credenciales de Odoo incorrectas o sin salida de red al ERP.           |
 | `python` no se reconoce al instalar       | Reinstale Python marcando *"Add python.exe to PATH"* o use `py`.       |
 | No hay acceso desde otras PCs             | Habilite la regla de firewall del puerto o reejecute el instalador.    |
+| El panel indica *"sincronizacion: error"* | `GET /api/sync/errores` o `logs\kardex_server.log`; normalmente es    |
+|                                           | perdida de red: el siguiente ciclo reintenta solo la pagina pendiente. |
+| El kardex tarda en cargar                 | La primera sincronizacion completa esta en curso: el reporte se arma   |
+|                                           | consultando el ERP hasta que el espejo queda completo.                  |
 
 ---
 

@@ -72,7 +72,7 @@
     </div>
     <nav class="side-nav" id="sideNav">
       <a href="/despacho" class="sn" id="navDespacho"><span class="ic">📦</span>Despacho</a>
-      <a href="/devoluciones" class="sn" id="navDevoluciones"><span class="ic">↩️</span>Devoluciones</a>
+      <a href="/devoluciones" class="sn" id="navDevoluciones" style="display:none"><span class="ic">↩️</span>Devoluciones pendientes</a>
       <a href="/" class="sn" id="navKardex"><span class="ic">🗂️</span>Kardex</a>
       <a href="/permisos" class="sn" id="navPermisos"><span class="ic">🔒</span>Permisos</a>
       <a href="/configuracion" class="sn on" id="navConfig"><span class="ic">⚙️</span>Configuraci&oacute;n</a>
@@ -160,6 +160,7 @@ async function pedir(url) {
     $("#userName").textContent = yo.nombre;
     $("#userRole").textContent = "Administrador Odoo";
     $("#avatar").textContent = (yo.nombre || "K").trim().charAt(0).toUpperCase();
+    if ((yo.modulos || []).includes("devoluciones")) $("#navDevoluciones").style.display = "";
 
     const c = await pedir("/api/config");
     $("#cfgOrigen").innerHTML = [

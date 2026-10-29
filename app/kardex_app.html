@@ -67,10 +67,10 @@
   .kpi span{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
   .kpi strong{font-size:20px;display:block;margin:2px 0}
   .kpi small{font-size:11px;color:var(--muted)}
-   .tablebox{background:#fff;border:1px solid var(--line);border-radius:12px;overflow-x:auto;overflow-y:auto;max-height:68vh}
-   table{border-collapse:separate;border-spacing:0;table-layout:fixed;width:100%;font-size:13px}
-   thead th{position:sticky;top:0;background:#0f172a;color:#fff;text-align:left;padding:10px 16px;font-size:11px;
-            text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;cursor:pointer;line-height:1.2;position:relative;user-select:none}
+   .tablebox{background:#fff;border:1px solid var(--line);border-radius:12px;overflow-x:auto;overflow-y:auto;max-height:68vh;position:relative}
+   table.mov-table{border-collapse:separate;border-spacing:0;table-layout:fixed;width:100%;font-size:13px}
+   .mov-table thead th{position:sticky;top:0;background:#0f172a;color:#fff;text-align:left;padding:10px 16px;font-size:11px;z-index:999;
+              text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;cursor:pointer;line-height:1.2;user-select:none;z-index:30}
    thead th:hover{background:#1e293b}
    thead th .th-label{display:inline-block;padding-right:14px}
    thead th .resizer{position:absolute;right:0;top:4px;height:calc(100% - 8px);width:8px;cursor:col-resize;user-select:none;touch-action:none}
@@ -185,11 +185,11 @@
     <div class="side-sub">Fimas</div>
   </div>
   <nav class="side-nav">
-    <a href="/despacho" class="sn" id="navDespacho"><span class="ic">📦</span>Despacho</a>
+    <a href="/despacho" class="sn" id="navDespacho"><span class="ic">🚚</span>Despacho</a>
+    <a href="/" class="sn" id="navKardex"><span class="ic">📦</span>Kardex</a>
     <a href="/devoluciones" class="sn" id="navDevoluciones"><span class="ic">↩️</span>Devoluciones pendientes</a>
-    <a href="/" class="sn on" id="navKardex"><span class="ic">🗂️</span>Kardex</a>
-    <a href="/permisos" class="sn" id="navPermisos" style="display:none"><span class="ic">🔒</span>Permisos</a>
-    <a href="/configuracion" class="sn" id="navConfig" style="display:none"><span class="ic">⚙️</span>Configuraci&oacute;n</a>
+    <a href="/permisos" class="sn" id="navPermisos"><span class="ic">🔐</span>Permisos</a>
+    <a href="/configuracion" class="sn" id="navConfig"><span class="ic">⚙️</span>Configuración</a>
   </nav>
   <div class="side-foot">
     <div class="who">
@@ -491,7 +491,7 @@ function render() {
   const cols = ["Fecha","Tipo Mvto.","Num. Doc.","Origen / Destino","Entradas","Salidas","Costo Unit.","Saldo","Valor Total Saldo"];
   const keys = ["fecha","tipo","doc","origen","ent","sal","cost","saldo","valor"];
   const resumen = `${krows.length} movimientos` + (nInt ? ` + ${nInt} internas` : "");
-   $("#tableHost").innerHTML = `<div class="tablebox"><table>
+   $("#tableHost").innerHTML = `<div class="tablebox"><table class="mov-table">
      <thead><tr>${cols.map((c,i) => `<th data-k="${keys[i]}"><span class="th-label">${c}</span><span class="resizer"></span></th>`).join("")}</tr></thead>
      <tbody>${body || `<tr><td colspan="9" style="text-align:center;padding:24px;color:#64748b">Sin resultados para los filtros aplicados.</td></tr>`}</tbody>
      <tfoot><tr><td>TOTALES</td><td></td><td></td><td>${resumen} filtrados</td>

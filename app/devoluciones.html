@@ -3,118 +3,84 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Fimas - Devoluciones pendientes de compras puntuales (FINPAC)</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b1220'/%3E%3Cpath d='M8 22V10h4l4 7 4-7h4v12h-3v-7l-3.2 6h-3.6L11 15v7z' fill='%2338bdf8'/%3E%3C/svg%3E" />
+<title>Fimas - Devoluciones pendientes</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%270b1220%27/%3E%3Cpath d=%27M8 22V10h4l4 7 4-7h4v12h-3v-7l-3.2 6h-3.6L11 15v7z%27 fill=%2738bdf8%27/%3E%3C/svg%3E" />
 <style>
-  :root{--line:#e2e8f0;--muted:#64748b;--ink:#0f172a;--brand:#1d4ed8;--ok:#047857;--err:#b91c1c}
+  :root{--line:#e2e8f0;--muted:#64748b;--ink:#0f172a;--brand:#1d4ed8}
   *{box-sizing:border-box}
   html,body{height:100%}
   body{margin:0;background:#f1f5f9;color:var(--ink);font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
   .shell{display:flex;height:100vh;overflow:hidden}
-  .side{flex:none;width:252px;min-height:0;background:#0b1220;color:#cbd5e1;
-        display:flex;flex-direction:column;gap:16px;padding:16px 14px;overflow:auto}
+  .side{flex:none;width:252px;min-height:0;background:#0b1220;color:#cbd5e1;display:flex;flex-direction:column;gap:16px;padding:16px 14px;overflow:auto}
   .side-title{font-size:10.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#7dd3fc}
   .side-sub{font-size:17px;font-weight:800;color:#fff;margin-top:2px}
   .side-nav{display:flex;flex-direction:column;gap:8px}
-  .sn{display:flex;align-items:center;gap:11px;text-decoration:none;color:#cbd5e1;font-size:13.5px;
-      font-weight:600;padding:11px 13px;border-radius:12px;background:#16233a;border:1px solid #1e2f4a}
-  .sn .ic{font-size:16px;flex:none}
+  .sn{display:flex;align-items:center;gap:11px;text-decoration:none;color:#cbd5e1;font-size:13.5px;font-weight:600;padding:11px 13px;border-radius:12px;background:#16233a;border:1px solid #1e2f4a}
   .sn:hover{background:#1c2f4d;color:#fff}
   .sn.on{background:#1e40af;border-color:#3b82f6;color:#fff}
   .side-foot{margin-top:auto;display:flex;flex-direction:column;gap:10px}
-  .side-foot .who{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.06);
-                  border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px}
+  .side-foot .who{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px}
   .side-foot .who div{line-height:1.2;min-width:0}
   .side-foot .who b{display:block;font-size:12px;color:#e2e8f0}
   .side-foot .who span{font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:#7dd3fc}
-  .side-foot .avatar{width:27px;height:27px;border-radius:50%;flex:none;display:grid;place-items:center;
-                     font-size:11.5px;font-weight:700;color:#fff;background:linear-gradient(135deg,#38bdf8,#1d4ed8)}
-  .side-foot button{font-size:12px;font-weight:600;padding:7px 12px;border-radius:9px;cursor:pointer;
-                    border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#e2e8f0}
-  .side-foot button:hover{background:rgba(255,255,255,.18)}
+  .side-foot .avatar{width:27px;height:27px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:11.5px;font-weight:700;color:#fff;background:linear-gradient(135deg,#38bdf8,#1d4ed8)}
+  .side-foot button{font-size:12px;font-weight:600;padding:7px 12px;border-radius:9px;cursor:pointer;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#e2e8f0}
   .content{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow-y:auto}
-  .board{flex:0 0 auto;display:flex;flex-direction:column;gap:14px;
-         width:100%;max-width:1700px;margin:0 auto;padding:10px 14px 28px}
-  .bar{flex:none;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end;justify-content:space-between;
-       background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .board{flex:0 0 auto;display:flex;flex-direction:column;gap:14px;width:100%;max-width:1700px;margin:0 auto;padding:10px 14px 28px}
+  .bar{flex:none;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end;justify-content:space-between;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
   .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
   .count{font-size:14px;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:8px}
   .count b{font-size:20px;color:var(--brand)}
-  label{display:flex;flex-direction:column;gap:3px;font-size:10.5px;font-weight:700;
-        letter-spacing:.4px;text-transform:uppercase;color:#475569}
-  select,input{font:inherit;font-size:12.5px;padding:7px 9px;border:1px solid var(--line);
-               border-radius:7px;background:#fff;color:var(--ink)}
+  label{display:flex;flex-direction:column;gap:3px;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#475569}
+  select,input{font:inherit;font-size:12.5px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--ink)}
   button{font:inherit;padding:8px 14px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer}
   button:disabled{opacity:.55;cursor:not-allowed}
-  button.green{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600;font-size:12.5px}
-  .xls-btn{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#047857;
-           background:#ecfdf5;border:1px solid #a7f3d0;padding:7px 13px;border-radius:8px;cursor:pointer}
-  .xls-btn:hover{background:#d1fae5}
-  .xls-btn:disabled{opacity:.5;cursor:not-allowed}
+  .green{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600;font-size:12.5px}
+  .xls-btn{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;padding:7px 13px;border-radius:8px;cursor:pointer}
   .status{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:7px;align-self:center}
-  .block{display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);
-         border-radius:12px;overflow:hidden;min-height:70vh}
-  .tbl-head{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;
-            padding:14px 18px 11px;border-bottom:1px solid var(--line)}
+  .block{display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;min-height:70vh}
+  .tbl-head{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;padding:14px 18px 11px;border-bottom:1px solid var(--line)}
   .tbl-head h2{font-size:15.5px;margin:0}
   .hint{font-size:11.5px;color:var(--muted)}
   .tbl-scroll{flex:1;min-height:0;overflow:auto;padding-bottom:6px}
   table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px;line-height:1.45}
-  thead th{background:#0f172a;color:#fff;text-align:left;padding:11px 12px;font-size:10.5px;
-           text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;position:sticky;top:0;z-index:2}
+  thead th{background:#0f172a;color:#fff;text-align:left;padding:11px 12px;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;position:sticky;top:0;z-index:2}
   thead th.c{text-align:center}
   tbody td{padding:10px 12px;border-top:1px solid var(--line);vertical-align:middle}
   tbody tr:nth-child(even){background:#fbfcfe}
   tbody tr:hover{background:#eff6ff}
   td.c{text-align:center;font-variant-numeric:tabular-nums;font-weight:600}
   td.num{text-align:right;font-variant-numeric:tabular-nums}
-  td code{font-family:Consolas,Monaco,monospace;font-size:11.5px;background:#f1f5f9;
-          border:1px solid var(--line);border-radius:5px;padding:2px 6px}
+  td code{font-family:Consolas,Monaco,monospace;font-size:11.5px;background:#f1f5f9;border:1px solid var(--line);border-radius:5px;padding:2px 6px}
   .pend{color:#b45309;font-weight:700}
-  .tag{display:inline-block;margin-left:5px;font-size:9px;font-weight:800;letter-spacing:.4px;
-       padding:1px 5px;border-radius:5px;vertical-align:middle}
+  .tag{display:inline-block;margin-left:5px;font-size:9px;font-weight:800;letter-spacing:.4px;padding:1px 5px;border-radius:5px;vertical-align:middle}
   .tag.doc{background:#e0f2fe;color:#075985;border:1px solid #bae6fd}
   .tag.traz{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
-  tr.warn td{background:#fff7ed}
-  tr.warn:hover td{background:#ffedd5}
   .warnmark{color:#b45309;font-weight:800;margin-left:5px}
   .empty{padding:30px;text-align:center;color:var(--muted)}
-  .denied{max-width:560px;margin:60px auto;background:#fff;border:1px solid var(--line);border-radius:14px;
-          padding:34px;text-align:center}
-  .denied h3{margin:0 0 10px;font-size:18px;color:var(--err)}
+  .denied{max-width:560px;margin:60px auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:34px;text-align:center}
+  .denied h3{margin:0 0 10px;font-size:18px;color:#b91c1c}
   .denied p{margin:0;color:#475569;font-size:14px;line-height:1.6}
-  .spin{width:13px;height:13px;border:2px solid #cbd5e1;border-top-color:var(--brand);border-radius:50%;
-        display:inline-block;animation:sp .8s linear infinite}
+  .spin{width:13px;height:13px;border:2px solid #cbd5e1;border-top-color:var(--brand);border-radius:50%;display:inline-block;animation:sp .8s linear infinite}
   @keyframes sp{to{transform:rotate(360deg)}}
   .overlay{position:fixed;inset:0;background:rgba(11,18,32,.62);display:none;place-items:center;padding:20px;z-index:80}
   .overlay.on{display:grid}
-  .modal{width:100%;max-width:900px;max-height:90vh;overflow:auto;background:#fff;border-radius:16px;
-         box-shadow:0 30px 70px rgba(2,6,23,.4)}
-  .mhead{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:18px 22px;
-         border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:2}
+  .modal{width:100%;max-width:900px;max-height:90vh;overflow:auto;background:#fff;border-radius:16px;box-shadow:0 30px 70px rgba(2,6,23,.4)}
+  .mhead{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:2}
   .mhead h3{margin:0;font-size:17px}
   .mhead p{margin:4px 0 0;font-size:12.5px;color:var(--muted)}
   .mhead .x{border:0;background:#f1f5f9;width:34px;height:34px;border-radius:9px;font-size:18px;cursor:pointer}
   .mbody{padding:16px 22px 22px}
   .mini{border-collapse:separate;border-spacing:0;width:100%;font-size:12px}
-  .mini th{background:#f1f5f9;color:#334155;padding:7px 9px;text-align:left;font-size:10px;
-           text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--line)}
+  .mini th{background:#f1f5f9;color:#334155;padding:7px 9px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--line)}
   .mini td{padding:7px 9px;border-top:1px solid #eef2f7;font-variant-numeric:tabular-nums}
-  .resume{display:flex;flex-wrap:wrap;gap:8px 20px;padding:11px 13px;margin-bottom:12px;
-           background:#f8fafc;border:1px solid var(--line);border-radius:9px;font-size:12.5px;color:#334155}
+  .resume{display:flex;flex-wrap:wrap;gap:8px 20px;padding:11px 13px;margin-bottom:12px;background:#f8fafc;border:1px solid var(--line);border-radius:9px;font-size:12.5px;color:#334155}
   .resume b{color:var(--brand)}
   .vinculo{border:1px solid;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:12.5px}
+  .vinculo.doc{background:#f0f9ff;border-color:#bae6fd}
+  .vinculo.traz{background:#fffbeb;border-color:#fde68a}
   .vinculo .vtit{font-weight:700;margin-bottom:4px}
   .vinculo .vtex{color:#334155;line-height:1.55}
-  .vinculo.doc{background:#f0f9ff;border-color:#bae6fd}
-  .vinculo.doc .vtit{color:#075985}
-  .vinculo.traz{background:#fffbeb;border-color:#fde68a}
-  .vinculo.traz .vtit{color:#92400e}
-  @media(max-width:900px){
-    .shell{flex-direction:column;height:auto;overflow:visible}
-    .side{width:100%} .side-nav{flex-direction:row;flex-wrap:wrap}
-    .content{overflow:visible}
-  }
 </style>
 </head>
 <body>
@@ -125,55 +91,44 @@
     <div class="side-sub">Fimas</div>
   </div>
   <nav class="side-nav">
-    <a href="/" class="sn" id="navKardex"><span class="ic">🗂️</span>Kardex</a>
-    <a href="/despacho" class="sn" id="navDespacho"><span class="ic">📦</span>Despacho</a>
+    <a href="/despacho" class="sn" id="navDespacho"><span class="ic">🚚</span>Despacho</a>
+    <a href="/" class="sn" id="navKardex"><span class="ic">📦</span>Kardex</a>
     <a href="/devoluciones" class="sn on" id="navDevoluciones"><span class="ic">↩️</span>Devoluciones pendientes</a>
-    <a href="/permisos" class="sn" id="navPermisos"><span class="ic">🔒</span>Permisos</a>
-    <a href="/configuracion" class="sn" id="navConfig"><span class="ic">⚙️</span>Configuraci&oacute;n</a>
+    <a href="/permisos" class="sn" id="navPermisos"><span class="ic">🔐</span>Permisos</a>
+    <a href="/configuracion" class="sn" id="navConfig"><span class="ic">⚙️</span>Configuración</a>
   </nav>
   <div class="side-foot">
     <div class="who">
       <div class="avatar" id="avatar">K</div>
       <div><b id="userName">&nbsp;</b><span id="userRole">&nbsp;</span></div>
     </div>
-    <button id="btnSalir">Cerrar sesi&oacute;n</button>
+    <button id="btnSalir">Cerrar sesi�n</button>
   </div>
 </aside>
 <div class="content">
-<main class="board" id="board">
-
+<main class="board">
   <section class="bar">
     <div class="count">Devoluciones pendientes: <b id="total">0</b></div>
     <div class="filters">
       <label>Fecha desde<input type="date" id="fDesde"></label>
       <label>Fecha hasta<input type="date" id="fHasta"></label>
       <button class="green" id="btnGen">Generar reporte</button>
-      <button type="button" class="xls-btn" id="btnXlsx" disabled>&#128202; Exportar Excel</button>
+      <button type="button" class="xls-btn" id="btnXlsx" disabled>Exportar Excel</button>
       <span class="status" id="status"></span>
     </div>
   </section>
-
   <section class="block">
     <div class="tbl-head">
-      <h2>Devoluciones pendientes de compras puntuales &mdash; FINPAC</h2>
-      <span class="hint">Unidades devueltas por clientes de FINPAC, procedentes de compras puntuales/locales,
-      que siguen en el inventario sin venderse. Solo FINPAC: las compras internas con MASERVEN no se reportan.
-      La cantidad pendiente se obtiene con trazabilidad
-      cronol&oacute;gica FIFO sobre los movimientos reales: si otro vendedor vendi&oacute; esas unidades,
-      la pendiente baja; las compras posteriores del mismo c&oacute;digo no se atribuyen a la devoluci&oacute;n.
-      <br><b>DOC</b> = v&iacute;nculo documental confirmado (la orden de venta registra la OC de compra puntual).
-      <b>TRAZ</b> = v&iacute;nculo deducido por trazabilidad FIFO de capas (sin v&iacute;nculo documental).
-      Clic en una fila para ver el detalle.</span>
+      <h2>Devoluciones pendientes de compras puntuales � FINPAC</h2>
+      <span class="hint">Pulse Generar reporte para listar las devoluciones pendientes.</span>
     </div>
     <div class="tbl-scroll" id="tableHost">
       <div class="empty">Pulse <b>Generar reporte</b> para listar las devoluciones pendientes.</div>
     </div>
   </section>
-
 </main>
 </div>
 </div>
-
 <div class="overlay" id="ovDet">
   <div class="modal">
     <div class="mhead">
@@ -183,7 +138,6 @@
     <div class="mbody" id="dBody"></div>
   </div>
 </div>
-
 <div class="overlay" id="ovErr">
   <div class="modal" style="max-width:440px;padding:26px;text-align:center">
     <h3 id="eTitle" style="margin:0 0 8px;font-size:17px">No se pudo completar</h3>
@@ -191,192 +145,106 @@
     <button id="eBtn" style="width:100%;padding:12px;font-weight:600;border-radius:10px;background:var(--brand);color:#fff;border:0">Aceptar</button>
   </div>
 </div>
-
 <script>
 const $ = s => document.querySelector(s);
-const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
-  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const fmt = n => (n == null ? "\u2014" : Number(n).toLocaleString("es-EC",
-  { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-let USUARIO = null, ITEMS = [];
-
-function modalError(msg, titulo = "No se pudo completar") {
-  $("#eTitle").textContent = titulo;
-  $("#eMsg").textContent = msg;
-  $("#ovErr").classList.add("on");
-}
-$("#eBtn").addEventListener("click", () => $("#ovErr").classList.remove("on"));
-
-async function pedir(url) {
-  const r = await fetch(url);
-  if (r.status === 401) { location.href = "/login"; throw new Error("sesi\u00f3n expirada"); }
-  let j = {};
-  try { j = await r.json(); } catch (_) {}
-  if (!r.ok) throw Object.assign(new Error(j.mensaje || j.error || "Operaci\u00f3n no permitida"),
-                               { j, status: r.status });
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = n => (n == null ? '�' : Number(n).toLocaleString('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2}));
+let ITEMS = [];
+function modalError(msg,t='No se pudo completar'){ $('#eTitle').textContent=t; $('#eMsg').textContent=msg; $('#ovErr').classList.add('on'); }
+$('#eBtn').addEventListener('click',()=>$('#ovErr').classList.remove('on'));
+async function pedir(url){
+  const r = await fetch(url,{credentials:'same-origin'});
+  if(r.status===401){ location.href='/login'; throw new Error('sesi�n expirada'); }
+  let j={};
+  try{ j=await r.json(); }catch(e){}
+  if(!r.ok) throw Object.assign(new Error(j.mensaje||j.error||'Operaci�n no permitida'),{j,status:r.status});
   return j;
 }
-
-async function init() {
-  const me = await pedir("/api/auth/me");
-  USUARIO = me.usuario;
-  $("#userName").textContent = USUARIO.nombre;
-  $("#userRole").textContent = `Odoo UID ${USUARIO.id}${USUARIO.login ? " \u00b7 " + USUARIO.login : ""}`;
-  $("#avatar").textContent = (USUARIO.nombre || "K").trim().charAt(0).toUpperCase();
-  const mods = USUARIO.modulos || [];
-  $("#navKardex").style.display = mods.includes("kardex") ? "" : "none";
-  $("#navDespacho").style.display = mods.includes("despacho") ? "" : "none";
-  $("#navDevoluciones").style.display = mods.includes("devoluciones") ? "" : "none";
-  const admin = USUARIO.rol === "admin";
-  $("#navPermisos").style.display = admin ? "" : "none";
-  $("#navConfig").style.display = admin ? "" : "none";
-
-  if (!mods.includes("devoluciones")) {
-    $("#board").innerHTML = `<div class="denied"><h3>Acceso denegado</h3>
-      <p>Lo siento, no tienes permiso para acceder al m&oacute;dulo Devoluciones pendientes.<br>
-      <small>Pide al administrador que lo habilite desde el Panel de Permisos.</small></p></div>`;
+async function init(){
+  const me = await pedir('/api/auth/me');
+  const u = me.usuario||me;
+  $('#userName').textContent = u.nombre||u.name||'';
+  $('#userRole').textContent = 'Odoo UID '+(u.id||'');
+  $('#avatar').textContent = ((u.nombre||u.name||'K').trim().charAt(0)||'K').toUpperCase();
+  const mods = u.modulos||[];
+  $('#navKardex').style.display = mods.includes('kardex')?'':'none';
+  $('#navDespacho').style.display = mods.includes('despacho')?'':'none';
+  $('#navDevoluciones').style.display = mods.includes('devoluciones')?'':'none';
+  if(u.rol==='admin'){ $('#navPermisos').style.display=''; $('#navConfig').style.display=''; }
+  if(!mods.includes('devoluciones')){
+    document.querySelector('.board').innerHTML = '<div class="denied"><h3>Acceso denegado</h3><p>Sin permiso para este m�dulo.</p></div>';
     return;
   }
-
   const hoy = new Date();
-  const iso = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-  $("#fHasta").value = iso(hoy);
-  $("#fDesde").value = iso(new Date(hoy.getFullYear(), hoy.getMonth() - 1, hoy.getDate()));
+  const iso = d=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  $('#fHasta').value = iso(hoy);
+  $('#fDesde').value = iso(new Date(hoy.getFullYear(),hoy.getMonth()-1,hoy.getDate()));
 }
-
-function params() {
-  return new URLSearchParams({ desde: $("#fDesde").value, hasta: $("#fHasta").value });
-}
-
-async function generar() {
-  const btn = $("#btnGen");
-  btn.disabled = true;
-  $("#btnXlsx").disabled = true;
-  $("#status").innerHTML = '<span class="spin"></span>Consultando el ERP y trazando los movimientos... puede tardar un momento.';
-  try {
-    const d = await pedir("/api/devoluciones?" + params().toString());
-    render(d);
-    $("#status").textContent = d.generado ? `Actualizado: ${d.generado}` : "";
-  } catch (err) {
-    $("#status").textContent = "";
-    if (err.status === 403) {
-      ITEMS = [];
-      $("#total").textContent = "0";
-      $("#tableHost").innerHTML = `<div class="denied"><h3>Acceso denegado</h3><p>${esc(err.message)}</p></div>`;
-    } else {
-      modalError(err.message);
+function params(){ return new URLSearchParams({desde:$('#fDesde').value,hasta:$('#fHasta').value}); }
+async function generar(){
+  const btn=$('#btnGen');
+  btn.disabled=true;
+  $('#btnXlsx').disabled=true;
+  $('#status').innerHTML='<span class="spin"></span> Consultando...';
+  $('#tableHost').innerHTML='<div class="empty"><span class="spin"></span> Consultando movimientos...</div>';
+  try{
+    const d = await pedir('/api/devoluciones?'+params().toString());
+    ITEMS = d.items||[];
+    $('#total').textContent = d.total||ITEMS.length;
+    $('#status').textContent = d.generado?('Actualizado: '+d.generado):'';
+    if(!ITEMS.length){
+      $('#tableHost').innerHTML='<div class="empty"><b>'+esc(d.mensaje||'Sin devoluciones pendientes.')+'</b></div>';
+      btn.disabled=false;
+      return;
     }
-  } finally {
-    btn.disabled = false;
+    const body = ITEMS.map((it,i)=>{
+      const traz = it.vinculo_tipo==='TRAZ' || it.vinculo==='trazabilidad';
+      const tag = traz?'<span class="tag traz">TRAZ</span>':'<span class="tag doc">DOC</span>';
+      const aviso = it.aviso?'<span class="warnmark">!</span>':'';
+      return '<tr data-i="'+i+'"><td>'+esc(it.cliente)+'</td><td>'+esc(it.orden_venta)+'</td><td><b>'+esc(it.codigo)+'</b>'+aviso+'</td><td>'+esc(it.descripcion)+'</td><td class="num">'+fmt(it.cantidad_devuelta)+'</td><td class="num pend">'+fmt(it.cantidad_pendiente)+'</td><td class="num">'+fmt(it.stock_actual)+'</td><td><code>'+esc(it.orden_compra)+'</code>'+tag+'</td><td>'+esc(it.proveedor)+'</td><td>'+esc(it.fecha_oc)+'</td><td class="num">'+fmt(it.costo_unitario)+'</td><td>'+esc(it.vendedor)+'</td></tr>';
+    }).join('');
+    $('#tableHost').innerHTML='<table><thead><tr><th>CLIENTE</th><th>ORDEN DE VENTA ORIGINAL</th><th>C�DIGO</th><th>DESCRIPCI�N</th><th class="c">CANTIDAD DEVUELTA</th><th class="c">CANTIDAD PENDIENTE</th><th class="c">STOCK ACTUAL</th><th>ORDEN DE COMPRA</th><th>PROVEEDOR</th><th>FECHA DE O/C</th><th class="c">COSTO UNITARIO</th><th>VENDEDOR</th></tr></thead><tbody>'+body+'</tbody></table>';
+    $('#btnXlsx').disabled=false;
+  }catch(err){
+    $('#status').textContent='';
+    if(err.status===403){
+      $('#tableHost').innerHTML='<div class="denied"><h3>Acceso denegado</h3><p>'+esc(err.message)+'</p></div>';
+    }else{
+      modalError(err.message);
+      $('#tableHost').innerHTML='<div class="empty">Error al cargar. Reintente.</div>';
+    }
+  }finally{
+    btn.disabled=false;
   }
 }
-
-function render(d) {
-  ITEMS = d.items || [];
-  $("#total").textContent = d.total || 0;
-  if (!ITEMS.length) {
-    $("#tableHost").innerHTML = `<div class="empty"><b>${esc(d.mensaje || "Sin devoluciones pendientes.")}</b></div>`;
-    $("#btnXlsx").disabled = true;
-    return;
+$('#tableHost').addEventListener('click',e=>{
+  const tr=e.target.closest('tr[data-i]');
+  if(!tr) return;
+  const it=ITEMS[Number(tr.dataset.i)];
+  if(!it) return;
+  abrir(it);
+});
+async function abrir(it){
+  $('#dTitle').textContent=it.codigo+' � '+it.orden_venta;
+  $('#dSub').textContent=it.cliente+' � OC '+it.orden_compra;
+  $('#dBody').innerHTML='<div class="empty"><span class="spin"></span> Cargando...</div>';
+  $('#ovDet').classList.add('on');
+  try{
+    const det = await pedir('/api/devoluciones/detalle?move_id='+it.move_id);
+    const traz = it.vinculo_tipo==='TRAZ' || it.vinculo==='trazabilidad';
+    const vinculo = traz?'<b>TRAZ</b> � v�nculo deducido por trazabilidad FIFO':'<b>DOC</b> � v�nculo documental confirmado';
+    const filas = (det.movimientos||[]).map(m=>'<tr><td>'+esc(m.fecha)+'</td><td><code>'+esc(m.nombre)+'</code></td><td>'+esc(m.tipo)+'</td><td>'+esc(m.origen||'')+'</td><td class="num">'+fmt(m.cantidad)+'</td><td class="num">'+(m.saldo!=null?fmt(m.saldo):'�')+'</td></tr>').join('');
+    $('#dBody').innerHTML='<div class="resume"><span>Devuelta: <b>'+fmt(it.cantidad_devuelta)+'</b></span><span>Pendiente: <b>'+fmt(it.cantidad_pendiente)+'</b></span><span>Stock actual: <b>'+fmt(it.stock_actual)+'</b></span><span>Stock inicial no trazado: <b>'+fmt(det.stock_inicial_no_trazado)+'</b></span></div><div class="vinculo '+(traz?'traz':'doc')+'"><div class="vtit">V�nculo devoluci�n ? compra: '+vinculo+'</div><div class="vtex">'+esc(it.vinculo_detalle||'')+'</div></div><table class="mini"><thead><tr><th>Fecha</th><th>Documento</th><th>Tipo</th><th>Origen</th><th>Cantidad</th><th>Saldo despu�s</th></tr></thead><tbody>'+filas+'</tbody></table>';
+  }catch(e){
+    $('#dBody').innerHTML='<div class="empty"><b>'+esc(e.message)+'</b></div>';
   }
-  $("#btnXlsx").disabled = false;
-  const body = ITEMS.map((it, i) => {
-    const traz = it.vinculo_tipo === "TRAZ" || it.vinculo === "trazabilidad";
-    const tag = traz
-      ? '<span class="tag traz" title="V&iacute;nculo DEDUCIDO por trazabilidad FIFO: la OC se dedujo de la capa de stock que surtio la entrega al cliente que devuelve. No hay vinculo documental en la orden de venta">TRAZ</span>'
-      : '<span class="tag doc" title="V&iacute;nculo DOCUMENTAL confirmado: la orden de venta original registra esta OC de compra puntual de FINPAC">DOC</span>';
-    const aviso = it.aviso
-      ? `<span class="warnmark" title="${esc(it.aviso)}">&#9888;</span>` : "";
-    const tt = it.aviso ? esc(it.aviso) : "Clic para ver los movimientos que sustentan el saldo";
-    return `<tr data-i="${i}" class="${it.aviso ? "warn" : ""}" title="${tt}">
-      <td>${esc(it.cliente)}</td>
-      <td>${esc(it.orden_venta)}</td>
-      <td><b>${esc(it.codigo)}</b>${aviso}</td>
-      <td>${esc(it.descripcion)}</td>
-      <td class="num">${fmt(it.cantidad_devuelta)}</td>
-      <td class="num pend">${fmt(it.cantidad_pendiente)}</td>
-      <td class="num">${fmt(it.stock_actual)}</td>
-      <td><code>${esc(it.orden_compra)}</code>${tag}</td>
-      <td>${esc(it.proveedor)}</td>
-      <td>${esc(it.fecha_oc)}</td>
-      <td class="num">${fmt(it.costo_unitario)}</td>
-      <td>${esc(it.vendedor)}</td>
-    </tr>`;
-  }).join("");
-  $("#tableHost").innerHTML = `<table>
-    <thead><tr>
-      <th>CLIENTE</th><th>ORDEN DE VENTA ORIGINAL</th><th>C&Oacute;DIGO</th><th>DESCRIPCI&Oacute;N</th>
-      <th class="c">CANTIDAD DEVUELTA</th><th class="c">CANTIDAD PENDIENTE</th><th class="c">STOCK ACTUAL</th>
-      <th>ORDEN DE COMPRA</th><th>PROVEEDOR</th><th>FECHA DE O/C</th>
-      <th class="c">COSTO UNITARIO</th><th>VENDEDOR</th>
-    </tr></thead>
-    <tbody>${body}</tbody>
-  </table>`;
 }
-
-$("#tableHost").addEventListener("click", e => {
-  const tr = e.target.closest("tr[data-i]");
-  if (tr) abrirDetalle(ITEMS[Number(tr.dataset.i)]);
-});
-
-async function abrirDetalle(it) {
-  $("#dTitle").textContent = `${it.codigo} \u2014 ${it.orden_venta}`;
-  $("#dSub").textContent = `${it.cliente} \u00b7 devoluci\u00f3n del ${it.fecha_devolucion || ""} \u00b7 OC ${it.orden_compra}`;
-  $("#dBody").innerHTML = '<div class="empty"><span class="spin"></span> Cargando movimientos...</div>';
-  $("#ovDet").classList.add("on");
-  let det;
-  try {
-    det = await pedir("/api/devoluciones/detalle?" + new URLSearchParams({ move_id: it.move_id }).toString());
-  } catch (err) {
-    $("#dBody").innerHTML = `<div class="empty"><b>${esc(err.message)}</b></div>`;
-    return;
-  }
-  const filas = (det.movimientos || []).map(m => `<tr>
-      <td>${esc(m.fecha)}</td><td><code>${esc(m.nombre)}</code></td>
-      <td>${esc(m.tipo)}</td><td>${esc(m.origen || "")}</td>
-      <td class="num">${fmt(m.cantidad)}</td></tr>`).join("");
-  const traz = it.vinculo_tipo === "TRAZ" || it.vinculo === "trazabilidad";
-  const vinculoTxt = traz
-    ? "<b>TRAZ</b> &mdash; v&iacute;nculo deducido por trazabilidad FIFO"
-    : "<b>DOC</b> &mdash; v&iacute;nculo documental confirmado";
-  $("#dBody").innerHTML = `
-    <div class="resume">
-      <span>Devuelta: <b>${fmt(it.cantidad_devuelta)}</b></span>
-      <span>Pendiente: <b>${fmt(it.cantidad_pendiente)}</b></span>
-      <span>Stock actual del producto: <b>${fmt(it.stock_actual)}</b></span>
-      <span>Stock inicial no trazado: <b>${fmt(det.stock_inicial_no_trazado)}</b></span>
-    </div>
-    <div class="vinculo ${traz ? "traz" : "doc"}">
-      <div class="vtit">V&iacute;nculo devoluci&oacute;n &rarr; compra: ${vinculoTxt}</div>
-      <div class="vtex">${esc(it.vinculo_detalle || "")}</div>
-      <div class="vtex">Orden de compra: <b>${esc(it.orden_compra)}</b> &middot;
-        Proveedor: ${esc(it.proveedor)} &middot; Costo unitario: ${fmt(it.costo_unitario)}</div>
-    </div>
-    <table class="mini"><thead><tr><th>Fecha</th><th>Documento</th><th>Tipo de movimiento</th>
-      <th>Origen</th><th>Cantidad</th></tr></thead><tbody>${filas}</tbody></table>
-    <p class="hint" style="margin-top:12px">Rastreo cronol&oacute;gico FIFO: las <b>ventas y salidas</b> posteriores
-      consumen primero las unidades m&aacute;s antiguas, de modo que las unidades devueltas se descuentan cuando
-      otro vendedor las vende. Las <b>recepciones de compra</b>, los <b>ajustes</b> y las <b>otras devoluciones</b>
-      son stock nuevo y no se atribuyen a esta devoluci&oacute;n. Los <b>traslados internos</b> no alteran la
-      disponibilidad y se ignoran para el saldo.</p>`;
-}
-
-$("#dClose").addEventListener("click", () => $("#ovDet").classList.remove("on"));
-$("#ovDet").addEventListener("click", e => { if (e.target.id === "ovDet") $("#ovDet").classList.remove("on"); });
-
-$("#btnGen").addEventListener("click", generar);
-$("#btnXlsx").addEventListener("click", () => {
-  location.href = "/api/devoluciones/export?" + params().toString();
-});
-$("#btnSalir").addEventListener("click", async () => {
-  await fetch("/api/auth/logout", { method: "POST" });
-  location.href = "/login";
-});
-
-init().catch(err => {
-  if (err.message === "sesi\u00f3n expirada") return;
-  modalError(err.message || "No fue posible inicializar la pantalla.");
-});
+$('#dClose').addEventListener('click',()=>$('#ovDet').classList.remove('on'));
+$('#ovDet').addEventListener('click',e=>{if(e.target.id==='ovDet') $('#ovDet').classList.remove('on');});
+$('#btnGen').addEventListener('click',generar);
+$('#btnXlsx').addEventListener('click',()=>{ location.href='/api/devoluciones/export?'+params().toString(); });
+$('#btnSalir').addEventListener('click',async()=>{ await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'}); location.href='/login'; });
+init().catch(err=>{ if(err.message==='sesi�n expirada') return; modalError(err.message||'Error al iniciar'); });
 </script>
 </body>
 </html>

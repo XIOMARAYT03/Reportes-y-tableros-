@@ -158,8 +158,6 @@ def sr(model, domain, fields, order=None, limit=None):
 
 
 def id_of(v):
-    if isinstance(v, dict):
-        return v.get("id")
     if isinstance(v, (list, tuple)):
         return v[0] if v else None
     return v
@@ -239,7 +237,6 @@ def _datos_movimientos(product_id):
                 "compra_line_id": m["compra_line_id"], "venta_line_id": m["venta_line_id"],
                 "origen_retorno_id": m["origen_retorno_id"],
                 "company_id": m["company_id"], "referencia": m["referencia"],
-                "create_uid": m.get("usuario_id"),
             })
         capas = defaultdict(list)
         for c in svc.capas_producto(product_id):
@@ -250,8 +247,7 @@ def _datos_movimientos(product_id):
     moves = sr("stock.move", [("product_id", "=", product_id), ("state", "=", "done")],
                ["id", "name", "date", "quantity", "product_qty", "product_uom", "company_id",
                 "location_id", "location_dest_id", "state", "picking_id", "picking_type_id",
-                "purchase_line_id", "sale_line_id", "origin_returned_move_id", "origin",
-                "create_uid"],
+                "purchase_line_id", "sale_line_id", "origin_returned_move_id", "origin"],
                order="date asc, id asc")
     movs = [{"id": m["id"], "date": m["date"], "name": m.get("name") or "",
              "quantity": m.get("quantity") or 0.0, "product_qty": m.get("product_qty"),
@@ -265,8 +261,7 @@ def _datos_movimientos(product_id):
              "venta_line_id": id_of(m.get("sale_line_id")),
              "origen_retorno_id": id_of(m.get("origin_returned_move_id")),
              "company_id": id_of(m.get("company_id")),
-             "referencia": m.get("origin") or "",
-             "create_uid": id_of(m.get("create_uid"))} for m in moves]
+             "referencia": m.get("origin") or ""} for m in moves]
     capas = defaultdict(list)
     for l in sr("stock.valuation.layer", [("product_id", "=", product_id)],
                 ["stock_move_id", "quantity", "unit_cost", "value"]):
@@ -277,11 +272,11 @@ def _datos_movimientos(product_id):
 
 
 def _enriquecer_movimientos(movs):
-    """Agrega documento, picking, contraparte y responsable a cada movimiento."""
+    """Agrega documento, picking y contraparte a cada movimiento."""
     if not movs:
         return movs
     picks = _by_ids("stock.picking", [m.get("picking_id") for m in movs],
-                    ["id", "name", "partner_id", "origin", "state", "user_id"])
+                    ["id", "name", "partner_id", "origin", "state"])
     pol = _by_ids("purchase.order.line", [m.get("compra_line_id") for m in movs],
                   ["id", "order_id"])
     sol = _by_ids("sale.order.line", [m.get("venta_line_id") for m in movs], ["id", "order_id"])
@@ -292,13 +287,6 @@ def _enriquecer_movimientos(movs):
     noms = {p["id"]: p for p in partners(
         [id_of(v.get("partner_id")) for v in list(picks.values()) + list(pos.values())
          + list(sos.values())])}
-    # Quien realizo el movimiento: el responsable del traslado en Odoo
-    # (stock.picking.user_id) y, si no hubiera, quien creo el movimiento.
-    usuarios = _by_ids("res.users",
-                        [m.get("create_uid") for m in movs] +
-                        [id_of((picks.get(m.get("picking_id")) or {}).get("user_id"))
-                         for m in movs],
-                        ["id", "name", "login"])
     for m in movs:
         pk = picks.get(m.get("picking_id")) or {}
         po = pos.get(id_of((pol.get(m.get("compra_line_id")) or {}).get("order_id"))) or {}
@@ -318,9 +306,6 @@ def _enriquecer_movimientos(movs):
         elif pk.get("partner_id"):
             contraparte = noms.get(id_of(pk.get("partner_id")), {}).get("name")
         m["contraparte"] = contraparte or ""
-        usuario = (usuarios.get(id_of(pk.get("user_id")))
-                   or usuarios.get(m.get("create_uid")) or {})
-        m["usuario"] = usuario.get("name") or ""
     return movs
 
 
@@ -332,21 +317,6 @@ def build_kardex(company_id, product_id, refresh=False):
     destino y del alcance de la empresa (ubicaciones internas con
     company_id = empresa).  No se usa el codigo del tipo de picking para decidir
     el signo ni la existencia de capas de valorizacion.
-
-    Reglas aplicadas (ver `inventario.clasificar`):
-      * origen interno  -> destino interno : transferencia interna, efecto 0
-        (PICK, PACK, OUT e INT no cuentan dos veces la misma mercaderia).
-      * origen interno  -> destino externo : salida del almacen.
-      * origen externo  -> destino interno : entrada al almacen.
-      * origen externo  -> destino externo : sin efecto sobre el almacen.  Este
-        es el caso de los ajustes y los transitos entre companias (p. ej.
-        "Transito Inter-Companias" -> "Ajuste de Inventario"), que antes se
-        contaban como entrada y descuadraban las existencias.
-      * Todo traslado entre empresas (salida por una ubicacion interna y
-        entrada por otra) se refleja una sola vez en cada empresa.
-
-    Las cantidades se normalizan a la unidad base del producto y el saldo se
-    concilia contra `stock.quant` de las mismas ubicaciones internas.
 
     La fuente de datos es el espejo local sincronizado cuando esta al dia y,
     en caso contrario, una consulta directa al ERP.
@@ -362,27 +332,19 @@ def build_kardex(company_id, product_id, refresh=False):
               ["id", "display_name", "name", "default_code", "uom_id", "categ_id",
                "product_tmpl_id", "standard_price", "type"])[0]
     tmpl = sr("product.template", [("id", "=", id_of(prod["product_tmpl_id"]))],
-              ["cost_method", "valuation", "standard_price", "uom_id", "uom_po_id"])[0]
-    # Preferir la UoM del producto, si no existe usar la del template
-    if not prod.get("uom_id") and tmpl.get("uom_id"):
-        prod["uom_id"] = tmpl["uom_id"]
+              ["cost_method", "valuation", "standard_price"])[0]
 
     alm = inventario.almacenes(company_id)
     locs = inventario.ubicaciones()
     movimientos, capas, origen_datos = _datos_movimientos(product_id)
     movimientos = _enriquecer_movimientos(movimientos)
     quants = _quants(product_id)
-    # Stock fisico de referencia: quants que estan dentro del alcance.  Son los
-    # mismos que usa la conciliacion, de modo que la comparacion se hace sobre
-    # el mismo universo de ubicaciones que el que genera el kardex.
-    quants_alcance = [q for q in quants if id_of(q.get("location_id")) in alm]
 
     calc = inventario.calcular_kardex(company_id, prod, movimientos, capas, alm, locs,
                                       quants=quants)
     estado_sync = servicio_sync().estado()
     conciliacion = inventario.conciliar(company_id, prod, calc["kpi"]["saldo"], quants,
-                                        movimientos=movimientos, capas=capas, alm=alm,
-                                        locs=locs)
+                                        movimientos=movimientos, capas=capas, alm=alm)
     conciliacion["producto_id"] = product_id
     conciliacion["ultima_sincronizacion"] = estado_sync.get("ultima_sincronizacion")
 
@@ -399,43 +361,40 @@ def build_kardex(company_id, product_id, refresh=False):
                      "costo_promedio_erp": prod["standard_price"] or 0.0,
                      "metodo": {"average": "Promedio ponderado (average) - real_time",
                                 "fifo": "FIFO - real_time",
-                                "standard": "Costo estándar"}.get(tmpl["cost_method"], tmpl["cost_method"]),
+                                "standard": "Costo estÃ¡ndar"}.get(tmpl["cost_method"], tmpl["cost_method"]),
                      "valuacion": tmpl["valuation"]},
         "kpi": calc["kpi"],
         "rows": calc["rows"],
         "internals": calc["internals"],
         "externos": calc["externos"],
         "conciliacion": conciliacion,
-        "alcance": {"empresa": company_id,
-                    "ubicaciones_internas": len(alm),
-                    "quants": len(quants_alcance)},
         "origen_datos": origen_datos,
         "sincronizacion": estado_sync,
     }
     if not calc["rows"]:
         payload.update({"ok": False,
-                        "sin_movimientos": f"No se encontraron movimientos registrados para el ítem "
-                                           f"{prod['default_code']} - {prod['name']} en el período "
+                        "sin_movimientos": f"No se encontraron movimientos registrados para el Ã­tem "
+                                           f"{prod['default_code']} - {prod['name']} en el perÃ­odo "
                                            f"indicado para {payload['empresa']['nombre']}.",
                         "cancelados": 0, "total_moves": len(movimientos)})
     else:
         payload["desde"], payload["hasta"] = calc["rows"][0]["date"][:10], calc["rows"][-1]["date"][:10]
     payload["notas"] = [
         f"Fuente de datos: {origen_datos}. Movimientos completados (stock.move, estado done) "
-        f"y capas de valorización (stock.valuation.layer) del producto {product_id}.",
-        f"Unidad base del producto: {calc['unidad']} (precisión {calc['precision']}). Las "
+        f"y capas de valorizaciÃ³n (stock.valuation.layer) del producto {product_id}.",
+        f"Unidad base del producto: {calc['unidad']} (precisiÃ³n {calc['precision']}). Las "
         f"cantidades de los movimientos se convertieron a esta unidad con los factores "
-        f"configurados en Odoo; las conversiones entre categorías incompatibles se rechazan.",
-        f"Método de valuación del ERP: {payload['producto']['metodo']}; el valor contable de cada "
-        f"movimiento corresponde a su capa de valorización. Las cantidades físicas NO se toman "
+        f"configurados en Odoo; las conversiones entre categorÃ­as incompatibles se rechazan.",
+        f"MÃ©todo de valuaciÃ³n del ERP: {payload['producto']['metodo']}; el valor contable de cada "
+        f"movimiento corresponde a su capa de valorizaciÃ³n. Las cantidades fÃ­sicas NO se toman "
         f"de las capas.",
         f"Alcance: {len(alm)} ubicaciones internas de la empresa {payload['empresa']['nombre']}. "
-        f"El signo de cada movimiento se determina por su ubicación de origen y destino "
+        f"El signo de cada movimiento se determina por su ubicaciÃ³n de origen y destino "
         f"(entrada / salida / transferencia interna); los movimientos entre ubicaciones virtuales "
-        f"(ajuste, tránsito, producción) no alteran el stock del almacén.",
+        f"(ajuste, trÃ¡nsito, producciÃ³n) no alteran el stock del almacÃ©n.",
         f"Transferencias internas excluidas del detalle: {calc['kpi']['internos']} movimientos "
         f"({calc['kpi']['internos_qty']:,.2f} {calc['unidad']}); se listan en la hoja secundaria del Excel.",
-        f"Conciliación contra el stock físico de Odoo: {calc['kpi']['fisico']:,.2f} "
+        f"ConciliaciÃ³n contra el stock fÃ­sico de Odoo: {calc['kpi']['fisico']:,.2f} "
         f"{calc['unidad']} (quants del alcance) frente a {calc['kpi']['saldo']:,.2f} "
         f"{calc['unidad']} calculados por movimientos. Diferencia: "
         f"{conciliacion['diferencia']:,.2f} ({conciliacion['estado']}).",
@@ -443,31 +402,6 @@ def build_kardex(company_id, product_id, refresh=False):
     with _lock:
         _cache["kardex"][key] = (time.time(), payload)
     return payload
-
-
-def _productos_conciliables(empresa, limite, svc):
-    """Ids de los productos a conciliar y el origen de la seleccion.
-
-    Con el espejo local al dia se toman los productos con mas movimientos.  Si
-    el espejo aun no esta disponible (no se ha corrido la sincronizacion
-    completa) se consultan directamente en Odoo los productos que tienen
-    existencias en las ubicaciones internas de la empresa, de modo que el
-    reporte nunca queda vacio por falta de espejo.
-    """
-    ids = svc.productos_con_movimientos(limite)
-    if ids:
-        return ids, "espejo local (SQLite)"
-    alm = inventario.almacenes(empresa)
-    quants = sr("stock.quant",
-                [("location_id", "in", sorted(alm)), ("quantity", "!=", 0)],
-                ["product_id", "quantity"])
-    magnitudes = {}
-    for q in quants or []:
-        pid = id_of(q.get("product_id"))
-        if pid:
-            magnitudes[pid] = magnitudes.get(pid, 0.0) + (q.get("quantity") or 0.0)
-    top = sorted(magnitudes.items(), key=lambda kv: -abs(kv[1]))[:limite]
-    return [pid for pid, _ in top], "consulta directa a Odoo (stock.quant)"
 
 
 def conciliacion_empresa(empresa, limite=50):
@@ -481,7 +415,7 @@ def conciliacion_empresa(empresa, limite=50):
     svc = servicio_sync()
     alm = inventario.almacenes(empresa)
     locs = inventario.ubicaciones()
-    ids, origen_productos = _productos_conciliables(empresa, limite, svc)
+    ids = svc.productos_con_movimientos(limite)
     prods = _by_ids("product.product", ids,
                     ["id", "default_code", "name", "uom_id", "standard_price"])
     salida = []
@@ -494,9 +428,8 @@ def conciliacion_empresa(empresa, limite=50):
         quants = svc.quants_producto(pid, alm)
         calc = inventario.calcular_kardex(empresa, p, movs, capas, alm, locs, quants=quants)
         conc = inventario.conciliar(empresa, p, calc["kpi"]["saldo"], quants,
-                                    movimientos=movs, capas=capas, alm=alm, locs=locs)
+                                    movimientos=movs, capas=capas, alm=alm)
         conc["producto_id"] = pid
-        conc["origen_productos"] = origen_productos
         conc["ultima_sincronizacion"] = svc.estado().get("ultima_sincronizacion")
         svc.guardar_conciliacion(empresa, conc)
         salida.append(conc)
@@ -531,8 +464,7 @@ def filter_rows(payload, f_from, f_to, tipo, q):
             continue
         if tipo and r["tipo"] != tipo:
             continue
-        if q and q not in (r["doc"] + " " + r["origen"] + " " + r["tipo"] + " " +
-                           (r.get("usuario") or "")).lower():
+        if q and q not in (r["doc"] + " " + r["origen"] + " " + r["tipo"]).lower():
             continue
         out.append(r)
     return out
@@ -550,8 +482,7 @@ def filter_internals(payload, f_from, f_to, tipo, q):
             continue
         if tipo and i["tipo"] != tipo:
             continue
-        texto = " ".join(str(i.get(k) or "")
-                         for k in ("doc", "ubicacion", "origen", "tipo", "usuario")).lower()
+        texto = " ".join(str(i.get(k) or "") for k in ("doc", "ubicacion", "origen", "tipo")).lower()
         if q and q not in texto:
             continue
         out.append(i)
@@ -565,13 +496,6 @@ TITLE_FONT = Font(bold=True, size=14, color="0F172A")
 LBL = Font(bold=True, size=10, color="475569")
 THIN = Side(style="thin", color="CBD5E1")
 BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-
-
-def _celda_origen(texto, usuario):
-    """Origen/destino del movimiento con el responsable en una segunda linea."""
-    if usuario:
-        return f"{texto}\nRealizado por: {usuario}"
-    return texto
 
 
 def build_xlsx(payload, rows, frm, incluir_internas=False):
@@ -641,15 +565,14 @@ def build_xlsx(payload, rows, frm, incluir_internas=False):
         rr = head_row + i
         f = fecha.split("-")[2] + "/" + fecha.split("-")[1] + "/" + fecha.split("-")[0]
         if clase == "k":
-            vals = [f, mv["tipo"], mv["doc"], _celda_origen(mv["origen"], mv.get("usuario")),
-                    mv["entrada"], mv["salida"], mv["cost"], mv["saldo"], mv["valor_total"]]
+            vals = [f, mv["tipo"], mv["doc"], mv["origen"], mv["entrada"], mv["salida"],
+                    mv["cost"], mv["saldo"], mv["valor_total"]]
             tot_e += mv["entrada"]
             tot_s += mv["salida"]
             ultimo_kardex = mv
         else:
             vals = [f, "Transferencia interna", mv["doc"],
-                    _celda_origen(" → ".join(x for x in (mv.get("ubicacion"), mv.get("origen"))
-                                             if x), mv.get("usuario")),
+                    " \u2192 ".join(x for x in (mv.get("ubicacion"), mv.get("origen")) if x),
                     None, None, None, None, None]
         for c, v in enumerate(vals, start=1):
             cell = ws.cell(row=rr, column=c, value=v)
@@ -699,7 +622,7 @@ def build_xlsx(payload, rows, frm, incluir_internas=False):
 
     if payload["internals"]:
         w2 = wb.create_sheet("Transferencias internas")
-        h2 = ["Fecha", "Tipo", "Num. Doc.", "Cantidad", "Ubicación destino", "Origen", "Usuario"]
+        h2 = ["Fecha", "Tipo", "Num. Doc.", "Cantidad", "Ubicaci\u00f3n destino", "Origen"]
         for c, h in enumerate(h2, start=1):
             cell = w2.cell(row=1, column=c, value=h)
             cell.fill = HEAD_FILL
@@ -707,16 +630,15 @@ def build_xlsx(payload, rows, frm, incluir_internas=False):
             cell.border = BORDER
         for i, mv in enumerate(payload["internals"], start=2):
             f = mv["date"].split("-")[2] + "/" + mv["date"].split("-")[1] + "/" + mv["date"].split("-")[0]
-            for c, v in enumerate([f, mv["tipo"], mv["doc"], mv["cantidad"], mv["ubicacion"],
-                                   mv["origen"], mv.get("usuario") or ""], start=1):
+            for c, v in enumerate([f, mv["tipo"], mv["doc"], mv["cantidad"], mv["ubicacion"], mv["origen"]], start=1):
                 cell = w2.cell(row=i, column=c, value=v)
                 cell.border = BORDER
                 if c == 4:
                     cell.number_format = "#,##0.00"
-        for c, w in enumerate([12, 10, 32, 12, 40, 22, 22], start=1):
+        for c, w in enumerate([12, 10, 32, 12, 40, 22], start=1):
             w2.column_dimensions[get_column_letter(c)].width = w
         w2.freeze_panes = "A2"
-        w2.auto_filter.ref = f"A1:G{1 + len(payload['internals'])}"
+        w2.auto_filter.ref = f"A1:F{1 + len(payload['internals'])}"
 
     conc = payload.get("conciliacion")
     if conc:
@@ -771,8 +693,7 @@ def build_csv(payload, rows):
     for mv in rows:
         d = mv["date"].split("-")
         f = f"{d[2]}/{d[1]}/{d[0]}"
-        cells = [f, mv["tipo"], mv["doc"], _celda_origen(mv["origen"], mv.get("usuario")),
-                 f"{mv['entrada']:.2f}", f"{mv['salida']:.2f}",
+        cells = [f, mv["tipo"], mv["doc"], mv["origen"], f"{mv['entrada']:.2f}", f"{mv['salida']:.2f}",
                  f"{mv['cost']:.4f}", f"{mv['saldo']:.2f}", f"{mv['valor_total']:.2f}"]
         out.append(",".join('"' + c.replace('"', '""') + '"' for c in cells))
     return ("\ufeff" + "\n".join(out)).encode("utf-8")
@@ -1192,7 +1113,7 @@ class Handler(BaseHTTPRequestHandler):
                 usuarios = [{"id": r["id"], "nombre": r["name"], "login": r["login"],
                              "email": r["email"] or "",
                              "rol": "admin" if gid and gid in (r.get("groups_id") or [])
-                                    else "usuario_estándar",
+                                    else "usuario_estÃ¡ndar",
                              "modulos": permisos.obtener(r["id"])} for r in filas]
                 return self._json(200, {"modulos": permisos.listar_modulos(),
                                         "usuarios": usuarios})

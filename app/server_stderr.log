@@ -15,3 +15,7 @@ Traceback (most recent call last):
     return self._sock.recv_into(b)
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
 ----------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1213, in do_GET
+    cid, pid = int(one("company_id")), int(one("product_id"))
+TypeError: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'

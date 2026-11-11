@@ -1,0 +1,182 @@
+Traceback (most recent call last):
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1833, in do_GET
+    cid, pid = int(one("company_id")), int(one("product_id"))
+TypeError: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+Traceback (most recent call last):
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1833, in do_GET
+    cid, pid = int(one("company_id")), int(one("product_id"))
+TypeError: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+Traceback (most recent call last):
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1881, in do_GET
+    return self._json(200, build_despacho(empresa, user_id, d0, d1, rol))
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1179, in build_despacho
+    for m in sr("stock.move", [("picking_id", "in", picking_ids[i:i + 500])],
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 147, in sr
+    filas = _execute(model, "search_read", [domain], dict(base, limit=n, offset=offset))
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 108, in _execute
+    return _proxy().execute_kw(DB, UID, PWD, model, method, args, kwargs or {})
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\xmlrpc\client.py", line 1122, in __call__
+    return self.__send(self.__name, args)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\xmlrpc\client.py", line 1464, in __request
+    response = self.__transport.request(
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\xmlrpc\client.py", line 1166, in request
+    return self.single_request(host, handler, request_body, verbose)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\xmlrpc\client.py", line 1182, in single_request
+    return self.parse_response(resp)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\xmlrpc\client.py", line 1354, in parse_response
+    return u.close()
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\xmlrpc\client.py", line 668, in close
+    raise Fault(**self._stack[0])
+xmlrpc.client.Fault: <Fault 1: 'Traceback (most recent call last):\n  File "/usr/local/lib/python3.12/dist-packages/werkzeug/wsgi.py", line 542, in readinto\n    out_size = self._stream.readinto(temp_b)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/usr/lib/python3.12/socket.py", line 707, in readinto\n    return self._sock.recv_into(b)\n           ^^^^^^^^^^^^^^^^^^^^^^^\nTimeoutError: timed out\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File "/opt/odoo/odoo/addons/base/controllers/rpc.py", line 165, in xmlrpc_2\n    response = self._xmlrpc(service)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File "/opt/odoo/odoo/addons/base/controllers/rpc.py", line 137, in _xmlrpc\n    data = request.httprequest.get_data()\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/usr/local/lib/python3.12/dist-packages/werkzeug/wrappers/request.py", line 420, in get_data\n    rv = self.stream.read()\n         ^^^^^^^^^^^^^^^^^^\n  File "/usr/local/lib/python3.12/dist-packages/werkzeug/wsgi.py", line 577, in readall\n    data = self.read(1024 * 64)\n           ^^^^^^^^^^^^^^^^^^^^\n  File "/usr/local/lib/python3.12/dist-packages/werkzeug/wsgi.py", line 544, in readinto\n    self.on_disconnect(error=e)\n  File "/usr/local/lib/python3.12/dist-packages/werkzeug/wsgi.py", line 499, in on_disconnect\n    raise ClientDisconnected()\nwerkzeug.exceptions.ClientDisconnected: 400 Bad Request: The browser (or proxy) sent a request that this server could not understand.\n'>
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 59891)
+Traceback (most recent call last):
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1881, in do_GET
+    return self._json(200, build_despacho(empresa, user_id, d0, d1, rol))
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1179, in build_despacho
+    for m in sr("stock.move", [("picking_id", "in", picking_ids[i:i + 500])],
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 147, in sr
+    filas = _execute(model, "search_read", [domain], dict(base, limit=n, offset=offset))
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 108, in _execute
+    return _proxy().execute_kw(DB, UID, PWD, model, method, args, kwargs or {})
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\xmlrpc\client.py", line 1122, in __call__
+    return self.__send(self.__name, args)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\xmlrpc\client.py", line 1464, in __request
+    response = self.__transport.request(
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\xmlrpc\client.py", line 1166, in request
+    return self.single_request(host, handler, request_body, verbose)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\xmlrpc\client.py", line 1182, in single_request
+    return self.parse_response(resp)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\xmlrpc\client.py", line 1354, in parse_response
+    return u.close()
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\xmlrpc\client.py", line 668, in close
+    raise Fault(**self._stack[0])
+xmlrpc.client.Fault: <Fault 1: 'Traceback (most recent call last):\n  File "/usr/local/lib/python3.12/dist-packages/werkzeug/wsgi.py", line 542, in readinto\n    out_size = self._stream.readinto(temp_b)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/usr/lib/python3.12/socket.py", line 707, in readinto\n    return self._sock.recv_into(b)\n           ^^^^^^^^^^^^^^^^^^^^^^^\nTimeoutError: timed out\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File "/opt/odoo/odoo/addons/base/controllers/rpc.py", line 165, in xmlrpc_2\n    response = self._xmlrpc(service)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File "/opt/odoo/odoo/addons/base/controllers/rpc.py", line 137, in _xmlrpc\n    data = request.httprequest.get_data()\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/usr/local/lib/python3.12/dist-packages/werkzeug/wrappers/request.py", line 420, in get_data\n    rv = self.stream.read()\n         ^^^^^^^^^^^^^^^^^^\n  File "/usr/local/lib/python3.12/dist-packages/werkzeug/wsgi.py", line 577, in readall\n    data = self.read(1024 * 64)\n           ^^^^^^^^^^^^^^^^^^^^\n  File "/usr/local/lib/python3.12/dist-packages/werkzeug/wsgi.py", line 544, in readinto\n    self.on_disconnect(error=e)\n  File "/usr/local/lib/python3.12/dist-packages/werkzeug/wsgi.py", line 499, in on_disconnect\n    raise ClientDisconnected()\nwerkzeug.exceptions.ClientDisconnected: 400 Bad Request: The browser (or proxy) sent a request that this server could not understand.\n'>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 683, in process_request_thread
+    self.finish_request(request, client_address)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 747, in __init__
+    self.handle()
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\http\server.py", line 435, in handle
+    self.handle_one_request()
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\http\server.py", line 421, in handle_one_request
+    method()
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1957, in do_GET
+    self._json(500, {"error": "error_interno"})
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1671, in _json
+    self._send(code, json.dumps(data, ensure_ascii=False), headers=headers)
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1666, in _send
+    self.wfile.write(body)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 826, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] Se ha anulado una conexión establecida por el software en su equipo host
+----------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1881, in do_GET
+    return self._json(200, build_despacho(empresa, user_id, d0, d1, rol))
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1671, in _json
+    self._send(code, json.dumps(data, ensure_ascii=False), headers=headers)
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1666, in _send
+    self.wfile.write(body)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 826, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] Se ha anulado una conexión establecida por el software en su equipo host
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 60399)
+Traceback (most recent call last):
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1881, in do_GET
+    return self._json(200, build_despacho(empresa, user_id, d0, d1, rol))
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1671, in _json
+    self._send(code, json.dumps(data, ensure_ascii=False), headers=headers)
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1666, in _send
+    self.wfile.write(body)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 826, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] Se ha anulado una conexión establecida por el software en su equipo host
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 683, in process_request_thread
+    self.finish_request(request, client_address)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 747, in __init__
+    self.handle()
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\http\server.py", line 435, in handle
+    self.handle_one_request()
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\http\server.py", line 421, in handle_one_request
+    method()
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1957, in do_GET
+    self._json(500, {"error": "error_interno"})
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1671, in _json
+    self._send(code, json.dumps(data, ensure_ascii=False), headers=headers)
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1664, in _send
+    self.end_headers()
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\http\server.py", line 535, in end_headers
+    self.flush_headers()
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\http\server.py", line 539, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 826, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] Se ha anulado una conexión establecida por el software en su equipo host
+----------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1833, in do_GET
+    cid, pid = int(one("company_id")), int(one("product_id"))
+TypeError: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+Traceback (most recent call last):
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1881, in do_GET
+    return self._json(200, build_despacho(empresa, user_id, d0, d1, rol))
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1671, in _json
+    self._send(code, json.dumps(data, ensure_ascii=False), headers=headers)
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1666, in _send
+    self.wfile.write(body)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 826, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] Se ha anulado una conexión establecida por el software en su equipo host
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 60678)
+Traceback (most recent call last):
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1881, in do_GET
+    return self._json(200, build_despacho(empresa, user_id, d0, d1, rol))
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1671, in _json
+    self._send(code, json.dumps(data, ensure_ascii=False), headers=headers)
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1666, in _send
+    self.wfile.write(body)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 826, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] Se ha anulado una conexión establecida por el software en su equipo host
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 683, in process_request_thread
+    self.finish_request(request, client_address)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 747, in __init__
+    self.handle()
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\http\server.py", line 433, in handle
+    self.handle_one_request()
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\http\server.py", line 421, in handle_one_request
+    method()
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1957, in do_GET
+    self._json(500, {"error": "error_interno"})
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1671, in _json
+    self._send(code, json.dumps(data, ensure_ascii=False), headers=headers)
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1664, in _send
+    self.end_headers()
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\http\server.py", line 535, in end_headers
+    self.flush_headers()
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\http\server.py", line 539, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 826, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] Se ha anulado una conexión establecida por el software en su equipo host
+----------------------------------------

@@ -10,7 +10,7 @@ import urllib.parse
 import xml.parsers.expat
 import xmlrpc.client
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import date, datetime, time as dt_time, timedelta
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -699,18 +699,540 @@ def build_csv(payload, rows):
     return ("\ufeff" + "\n".join(out)).encode("utf-8")
 
 
-def build_despacho(empresa, filtro_id, d0, d1):
+_TZ_GUAYAQUIL = timedelta(hours=-5)
+_HORARIO_INICIO = dt_time(7, 0)
+_HORARIO_FIN = dt_time(16, 0)
+_FERIADOS_CACHE = {}
+
+
+def _pascua(anio):
+    a = anio % 19
+    b = anio // 100
+    c = anio % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    mes = (h + l - 7 * m + 114) // 31
+    dia = ((h + l - 7 * m + 114) % 31) + 1
+    return date(anio, mes, dia)
+
+
+def _trasladar_feriado(d, trasladable):
+    if not trasladable:
+        return d
+    dia_semana = d.weekday()
+    if dia_semana == 1:
+        return d - timedelta(days=1)
+    if dia_semana in (2, 3):
+        return d + timedelta(days=4 - dia_semana)
+    if dia_semana == 5:
+        return d - timedelta(days=1)
+    if dia_semana == 6:
+        return d + timedelta(days=1)
+    return d
+
+
+def _feriados_ecuador(anio):
+    cache = _FERIADOS_CACHE.get(anio)
+    if cache is not None:
+        return cache
+    pascua = _pascua(anio)
+    base = [
+        (date(anio, 1, 1), False),
+        (pascua - timedelta(days=48), False),
+        (pascua - timedelta(days=47), False),
+        (pascua - timedelta(days=2), False),
+        (date(anio, 5, 1), True),
+        (date(anio, 5, 24), True),
+        (date(anio, 7, 25), True),
+        (date(anio, 8, 10), True),
+        (date(anio, 10, 9), True),
+        (date(anio, 11, 2), True),
+        (date(anio, 11, 3), True),
+        (date(anio, 12, 25), False),
+    ]
+    feriados = {_trasladar_feriado(d, trasladable) for d, trasladable in base}
+    _FERIADOS_CACHE[anio] = feriados
+    return feriados
+
+
+def _es_dia_habil(d):
+    return d.weekday() < 5 and d not in _feriados_ecuador(d.year)
+
+
+def _siguiente_dia_habil(d):
+    d = d + timedelta(days=1)
+    while not _es_dia_habil(d):
+        d += timedelta(days=1)
+    return d
+
+
+def _minutos_habiles(desde_utc, hasta_utc):
+    ini = desde_utc + _TZ_GUAYAQUIL
+    fin = hasta_utc + _TZ_GUAYAQUIL
+    if fin <= ini:
+        return 0
+
+    d = ini.date()
+    hora = ini.time()
+    if _es_dia_habil(d):
+        if hora < _HORARIO_INICIO:
+            cursor = datetime.combine(d, _HORARIO_INICIO)
+        elif hora < _HORARIO_FIN:
+            cursor = ini
+        else:
+            cursor = datetime.combine(_siguiente_dia_habil(d), _HORARIO_INICIO)
+    else:
+        cursor = datetime.combine(_siguiente_dia_habil(d), _HORARIO_INICIO)
+
+    total = 0.0
+    while cursor < fin:
+        d = cursor.date()
+        if _es_dia_habil(d):
+            apertura = datetime.combine(d, _HORARIO_INICIO)
+            cierre = datetime.combine(d, _HORARIO_FIN)
+            tramo_ini = max(cursor, apertura)
+            tramo_fin = min(fin, cierre)
+            if tramo_fin > tramo_ini:
+                total += (tramo_fin - tramo_ini).total_seconds()
+        cursor = datetime.combine(d + timedelta(days=1), _HORARIO_INICIO)
+    return int(total // 60)
+
+
+def _fecha_hora_local(valor):
+    if not valor:
+        return ""
+    try:
+        return (datetime.strptime(valor, "%Y-%m-%d %H:%M:%S") + _TZ_GUAYAQUIL).strftime("%d/%m/%Y %H:%M")
+    except (TypeError, ValueError):
+        return ""
+
+
+def _fecha_local_corta(valor):
+    """Fecha 'YYYY-MM-DD' en hora local de Ecuador a partir de un UTC 'YYYY-MM-DD HH:MM:SS'.
+
+    Odoo guarda las fechas en UTC; recortar el texto sin convertir la zona
+    horaria desplaza al dia siguiente todo el trabajo hecho despues de las
+    19:00 local (UTC-5).
+    """
+    if not valor:
+        return ""
+    try:
+        return (datetime.strptime(valor, "%Y-%m-%d %H:%M:%S") + _TZ_GUAYAQUIL).strftime("%Y-%m-%d")
+    except (TypeError, ValueError):
+        return ""
+
+
+_ESTADOS_ASIGNADO = ("assigned", "disponible", "listo", "ready")
+_ESTADOS_HECHO = ("done", "hecho", "realizado", "completado")
+
+
+def _parse_lista_usuarios(raw):
+    """Ids y nombres exactos (en mayusculas) de una lista separada por comas."""
+    uids, nombres = set(), set()
+    for tok in (x.strip() for x in (raw or "").split(",")):
+        if not tok:
+            continue
+        if tok.isdigit():
+            uids.add(int(tok))
+        else:
+            nombres.add(tok.upper())
+    return uids, nombres
+
+
+# Usuarios que nunca se reportan como responsables de una fase de despacho:
+# el personal de facturacion valida traslados de bodega y escribe sobre ellos
+# el numero de autorizacion SRI, pero ese tramite administrativo no puede
+# figurar como ejecucion de PICK / PACK / OUT en el tablero ni en el grafico.
+# Se configura en el .env (despacho_excluir_usuarios) con ids o nombres
+# exactos de Odoo, separados por comas.
+_EXCL_RESP_IDS, _EXCL_RESP_NOMBRES = _parse_lista_usuarios(
+    CFG.get("despacho_excluir_usuarios", ""))
+
+
+def _resp_excluido(uid, nombre):
+    return ((uid or 0) in _EXCL_RESP_IDS or
+            (nombre or "").strip().upper() in _EXCL_RESP_NOMBRES)
+
+
+# Ordenes que no se asignaron a ningun despachador y fueron ejecutadas
+# directamente por estos usuarios (despacho_confirmacion_directa en el
+# .env, ids o nombres de Odoo separados por comas): al no existir una
+# asignacion que consultar, la referencia de inicio del pedido pasa a ser
+# la fecha de confirmacion de la orden de venta (sale.order.date_order).
+_CONF_DIRECTO_IDS, _CONF_DIRECTO_NOMBRES = _parse_lista_usuarios(
+    CFG.get("despacho_confirmacion_directa", ""))
+
+
+def _ejecutor_directo_conf(uid, nombre):
+    return ((uid or 0) in _CONF_DIRECTO_IDS or
+            (nombre or "").strip().upper() in _CONF_DIRECTO_NOMBRES)
+
+
+# Una misma persona puede haber trabajado con mas de un usuario de Odoo (una
+# cuenta generica tipo 'usuario002' y luego su cuenta propia): para el
+# tablero y sus reportes se unifican en una sola identidad. Se configura en
+# el .env (despacho_alias_usuarios) con pares "id_origen:id_canonico"
+# separados por comas; el nombre mostrado es el del usuario canonico.
+def _parse_alias_usuarios(raw):
+    alias = {}
+    for tok in (x.strip() for x in (raw or "").split(",")):
+        if not tok or ":" not in tok:
+            continue
+        origen, canonico = (x.strip() for x in tok.split(":", 1))
+        if origen.isdigit() and canonico.isdigit() and origen != canonico:
+            alias[int(origen)] = int(canonico)
+    return alias
+
+
+_ALIAS_RESP_IDS = _parse_alias_usuarios(CFG.get("despacho_alias_usuarios", ""))
+_ALIAS_NOMBRES = {}
+_ALIAS_LOCK = threading.Lock()
+
+
+def _nombre_canonico(uid):
+    """Nombre actual del usuario canonico (cache en memoria)."""
+    if uid not in _ALIAS_NOMBRES:
+        nombre = None
+        try:
+            fila = sr("res.users", [("id", "=", uid)], ["name"])
+            nombre = fila[0]["name"] if fila else None
+        except Exception as exc:
+            print(f"[despacho] No se pudo leer el usuario canonico {uid}: {exc}")
+        with _ALIAS_LOCK:
+            _ALIAS_NOMBRES[uid] = nombre
+    return _ALIAS_NOMBRES[uid]
+
+
+def _canon_usuario(uid, nombre=None):
+    """(id, nombre) unificados de un usuario de Odoo.
+
+    Si el id pertenece a una identidad duplicada se devuelve el usuario
+    canonico y su nombre; en caso contrario los datos entran sin cambios.
+    """
+    canonico = _ALIAS_RESP_IDS.get(uid or 0)
+    if canonico:
+        return canonico, _nombre_canonico(canonico)
+    return uid or 0, nombre
+
+
+# Despachadores que figuran como responsables del tablero de despachos (el
+# filtro "Despachador" de la pantalla solo ofrece esas personas; el resto de
+# usuarios de Odoo no aparece). El calculo replica como el tablero decide el
+# responsable de cada fase: asignado (stock.picking.user_id) o validador
+# (write_uid de una escritura contemporanea a la validacion).
+_DESPACHADORES_TTL = 900            # vigencia del cache, en segundos
+_despachadores_cache = {"ts": 0.0, "datos": None}
+_SISTEMA_UIDS = {1}                 # OdooBot: escribe en masa, nunca despacha
+
+
+def _tipos_fases_despacho():
+    """Tipos de operacion cuyos traslados forman las fases del tablero.
+
+    El tablero identifica cada fase por el nombre del traslado (token
+    PICK / PACK / OUT, que hereda del codigo de secuencia del tipo) o, en su
+    defecto, por el nombre del tipo de operacion. Aqui se seleccionan los
+    mismos tipos con esas mismas claves.
+    """
+    tipos = []
+    for t in (G.get("picking_types") or {}).values():
+        nombre = (t.get("name") or "").strip().lower()
+        seq = (t.get("sequence_code") or "").strip().lower()
+        if not nombre and not seq:
+            continue
+        if ("pick" in nombre
+                or any(k in nombre for k in ("pack", "emp", "prep"))
+                or any(k in nombre for k in ("out", "deliv", "salida", "entrega"))
+                or seq in ("pick", "pack", "out")):
+            tipos.append(t["id"])
+    return sorted(tipos)
+
+
+def _despachadores_tablero():
+    """Personas que figuran como responsables del tablero de despachos.
+
+    - Asignados: ``user_id`` de traslados de las fases con orden de venta y
+      sin cancelar; el tablero los muestra como responsables cuando no hay
+      rastro de quien valido.
+    - Validadores: ``write_uid`` de traslados validados cuya escritura cae
+      dentro de la ventana de validacion (|write_date - date_done| <= 120
+      s, la misma que usa el respaldo validador_write del tablero). Al
+      validar, Odoo deja write_uid en quien valido; una escritura posterior
+      (p. ej. el numero SRI que anade facturacion) no puede figurar como
+      ejecucion de bodega.
+    """
+    ahora = time.time()
+    if (_despachadores_cache["datos"] is not None
+            and ahora - _despachadores_cache["ts"] < _DESPACHADORES_TTL):
+        return _despachadores_cache["datos"]
+    datos = []
+    tipos = _tipos_fases_despacho()
+    empresas = [c["id"] for c in G.get("companies") or []]
+    if tipos and empresas:
+        base = [("picking_type_id", "in", tipos), ("sale_id", "!=", False),
+                ("state", "!=", "cancel"), ("company_id", "in", empresas)]
+        candidatos = {}
+        try:
+            # Asignados (read_group agrega en el ERP: una sola consulta).
+            for g in _execute("stock.picking", "read_group",
+                              [base, ["user_id"], ["user_id"]]):
+                uid = id_of(g.get("user_id"))
+                if uid and uid not in _SISTEMA_UIDS:
+                    candidatos[uid] = ref(g.get("user_id"))
+            # Candidatos a validador: ultimo escritor de traslados validados.
+            solo_valid = {}
+            for g in _execute("stock.picking", "read_group",
+                              [base + [("state", "=", "done")],
+                               ["write_uid"], ["write_uid"]]):
+                uid = id_of(g.get("write_uid"))
+                if (not uid or uid in _SISTEMA_UIDS or uid in candidatos
+                        or _resp_excluido(uid, ref(g.get("write_uid")))):
+                    continue
+                solo_valid[uid] = ref(g.get("write_uid"))
+            # Confirmacion del validador: al menos una escritura dentro de la
+            # ventana de validacion. La lectura se acota (y ordena por fecha
+            # descendente) para que quien escribe en masa sin validar, p. ej.
+            # los planificadores de Odoo, quede descartado sin leer todo su
+            # historial.
+            for uid, nombre in solo_valid.items():
+                filas = sr("stock.picking",
+                           base + [("state", "=", "done"), ("write_uid", "=", uid)],
+                           ["write_date", "date_done"],
+                           order="write_date desc", limit=300)
+                for p in filas:
+                    try:
+                        delta = abs((datetime.fromisoformat(p["write_date"]) -
+                                     datetime.fromisoformat(p["date_done"])).total_seconds())
+                    except (ValueError, TypeError):
+                        continue
+                    if delta <= 120:
+                        candidatos[uid] = nombre
+                        break
+        except Exception as exc:
+            print(f"[despacho] No se pudo calcular los despachadores del tablero: {exc}")
+            return []
+        unicos = {}
+        for uid, nombre in candidatos.items():
+            if _resp_excluido(uid, nombre):
+                continue
+            cid, cnom = _canon_usuario(uid, nombre)
+            unicos[cid] = {"id": cid, "nombre": cnom or nombre or f"uid {cid}"}
+        datos = sorted(unicos.values(), key=lambda x: (x["nombre"] or ""))
+        _despachadores_cache.update(ts=ahora, datos=datos)
+    return datos
+
+
+def _valor_vacio(valor):
+    return valor in (None, False, "", 0) or str(valor).strip().lower() in (
+        "false", "none", "ninguno", "sin asignar")
+
+
+def _tracking_pickings(picking_ids):
+    """Fechas y responsables reales tomados del Chatter (mail.message).
+
+    Devuelve {picking_id: {"asignado": utc, "hecho": utc,
+                           "hecho_por": nombre, "hecho_por_id": uid}}.
+
+    - asignado: primer cambio de ``user_id`` de vacio a un despachador, o
+      primer cambio de ``state`` a 'assigned' (Disponible).
+    - hecho: cambio de ``state`` a 'done' (Hecho) o el mensaje de validacion
+      del traslado (subtipo stock.mt_picking_done). Solo se usa como respaldo
+      cuando ``stock.picking.date_done`` no esta disponible.
+    - hecho_por / hecho_por_id: usuario que realmente valido la operacion
+      (autor del mensaje de validacion). Si el traslado se asigno a una
+      persona pero lo ejecuto otra, manda quien lo ejecuto; sin rastro en el
+      Chatter no se informan y queda el ``user_id`` asignado.
+
+    La lectura evita buscar ``mail.message`` con dominios masivos: en Odoo 18
+    ese modelo resuelve el acceso DESPUES de aplicar la ventana limit/offset
+    y con LEFT JOINs a las notificaciones del usuario conectado, de modo que
+    en lotes grandes recorta y duplica filas silenciosamente (un dominio con
+    search_count 1599 devolvia paginas de ~400 y mensajes de validacion
+    perdidos). En su lugar se buscan los ``mail.tracking.value`` atravesando
+    ``mail_message_id`` (subconsulta SQL plana que no pasa por ese filtro) y
+    los mensajes se leen por id con ``read()``, que tampoco pasa por
+    ``_search``.
+    """
+    resultado = {}
+    ids = sorted({i for i in picking_ids if i})
+    if not ids:
+        return resultado
+
+    # En esta version de Odoo el campo auditado es ``field_id`` (many2one a
+    # ir.model.fields); se resuelven los ids de 'user_id' y 'state' para no
+    # traer los demas cambios del documento.
+    try:
+        campos = {f["id"]: f["name"]
+                  for f in sr("ir.model.fields",
+                              [("model", "=", "stock.picking"),
+                               ("name", "in", ["user_id", "state"])],
+                              ["id", "name"])}
+    except Exception as exc:
+        print(f"[despacho] No se pudo leer ir.model.fields: {exc}")
+        return resultado
+    if not campos:
+        return resultado
+
+    # Subtipo oficial de validacion del traslado: el mensaje que lo lleva lo
+    # genera la accion de validar y su autor es el usuario que la ejecuto.
+    subtipo_done = set()
+    try:
+        for d in sr("ir.model.data",
+                    [("module", "=", "stock"), ("name", "=", "mt_picking_done"),
+                     ("model", "=", "mail.message.subtype")],
+                    ["res_id"]):
+            subtipo_done.add(d["res_id"])
+    except Exception as exc:
+        print(f"[despacho] No se pudo leer el subtipo de validacion: {exc}")
+
+    tracking = []
+    try:
+        for i in range(0, len(ids), 300):
+            tracking.extend(sr("mail.tracking.value",
+                               [("mail_message_id.model", "=", "stock.picking"),
+                                ("mail_message_id.res_id", "in", ids[i:i + 300]),
+                                ("field_id", "in", list(campos))],
+                               ["mail_message_id", "field_id", "old_value_char",
+                                "new_value_char", "old_value_integer",
+                                "new_value_integer"],
+                               order="id asc"))
+    except Exception as exc:
+        print(f"[despacho] No se pudo leer mail.tracking.value: {exc}")
+        return resultado
+
+    # Mensajes que llevan esos cambios, leidos por id: ver nota en el
+    # docstring sobre por que no se buscan con un dominio masivo.
+    msg_ids = sorted({id_of(tv.get("mail_message_id")) for tv in tracking} - {None})
+    mensajes = []
+    for i in range(0, len(msg_ids), 100):
+        lote = msg_ids[i:i + 100]
+        try:
+            mensajes.extend(_execute("mail.message", "read", [lote],
+                                     {"fields": ["id", "res_id", "date",
+                                                 "author_id", "subtype_id"]}))
+        except xmlrpc.client.Fault:
+            for mid in lote:
+                try:
+                    mensajes.extend(_execute("mail.message", "read", [[mid]],
+                                             {"fields": ["id", "res_id", "date",
+                                                         "author_id", "subtype_id"]}))
+                except xmlrpc.client.Fault as exc:
+                    print(f"[despacho] Mensaje {mid} ilegible: {exc.faultString[:80]}")
+
+    fecha_msg = {m["id"]: m.get("date") for m in mensajes}
+    pick_de_msg = {m["id"]: id_of(m.get("res_id")) for m in mensajes}
+    autor_de_msg = {m["id"]: m.get("author_id") for m in mensajes}
+
+    def anotar_validacion(pid, fecha, autor):
+        datos = resultado.setdefault(pid, {})
+        actual = datos.get("hecho")
+        if actual is None or fecha < actual:
+            datos["hecho"] = fecha
+            datos["_autor_validacion"] = autor
+
+    for m in mensajes:
+        pid = pick_de_msg.get(m["id"])
+        fecha = fecha_msg.get(m["id"])
+        if not pid or not fecha:
+            continue
+        if id_of(m.get("subtype_id")) in subtipo_done:
+            anotar_validacion(pid, fecha, autor_de_msg.get(m["id"]))
+
+    for tv in tracking:
+        msg_id = id_of(tv.get("mail_message_id"))
+        pid = pick_de_msg.get(msg_id)
+        fecha = fecha_msg.get(msg_id)
+        if not pid or not fecha:
+            continue
+        campo = campos.get(id_of(tv.get("field_id")))
+        datos = resultado.setdefault(pid, {})
+        if campo == "user_id":
+            nuevo = tv.get("new_value_integer") or tv.get("new_value_char")
+            viejo = tv.get("old_value_integer") or tv.get("old_value_char")
+            if nuevo and _valor_vacio(viejo):
+                if not datos.get("asignado") or fecha < datos["asignado"]:
+                    datos["asignado"] = fecha
+        elif campo == "state":
+            nuevo = (tv.get("new_value_char") or "").strip().lower()
+            if any(x in nuevo for x in _ESTADOS_ASIGNADO):
+                if not datos.get("asignado") or fecha < datos["asignado"]:
+                    datos["asignado"] = fecha
+            elif any(x in nuevo for x in _ESTADOS_HECHO):
+                anotar_validacion(pid, fecha, autor_de_msg.get(msg_id))
+
+    # El autor del mensaje es un res.partner; se resuelve al usuario interno
+    # (res.users) para mostrar su nombre y poder filtrar el tablero por el
+    # despachador que realmente ejecuto la operacion.
+    autores = sorted({id_of(d.get("_autor_validacion"))
+                      for d in resultado.values() if d.get("_autor_validacion")})
+    autor_a_usuario = {}
+    if autores:
+        try:
+            # Se incluyen usuarios archivados: la identidad de un validador
+            # historico no debe perderse porque su cuenta de Odoo ya no este
+            # activa (se unifica despues con _canon_usuario si procede).
+            for u in sr("res.users", [("partner_id", "in", autores),
+                                      ("active", "in", [True, False])],
+                        ["id", "name", "partner_id"]):
+                autor_a_usuario[id_of(u.get("partner_id"))] = u
+        except Exception as exc:
+            print(f"[despacho] No se pudo leer res.users de validadores: {exc}")
+    for datos in resultado.values():
+        autor = id_of(datos.pop("_autor_validacion", None))
+        usuario = autor_a_usuario.get(autor)
+        # La fecha de validacion ("hecho") se conserva siempre; la autoria
+        # solo se informa si el validador no es un usuario excluido del
+        # tablero (p.ej. facturacion), porque entonces no es ejecucion de
+        # bodega y el responsable queda resuelto por asignacion.
+        if usuario and not _resp_excluido(usuario.get("id"), usuario.get("name")):
+            datos["hecho_por_id"], datos["hecho_por"] = _canon_usuario(
+                usuario.get("id"), usuario.get("name"))
+    return resultado
+
+
+def _fase_por_documento(nombre):
+    """Tipo de operacion segun el nombre del traslado (PICK / PACK / OUT).
+
+    Se exige el token completo entre barras para no confundir, por ejemplo,
+    un picking con un nombre que solo contenga la palabra como subcadena.
+    """
+    partes = [x.strip().upper() for x in (nombre or "").split("/")]
+    if "PICK" in partes:
+        return "picking"
+    if "PACK" in partes:
+        return "packing"
+    if "OUT" in partes:
+        return "output"
+    return None
+
+
+def build_despacho(empresa, filtro_id, d0, d1, rol="todo"):
     """Tiempos de despacho por fase (picking/packing/output) en un rango de fechas.
 
     Puerto del reporte original /TiempoDespachoOutput/ de la app gestion-comercial.
-    d0 y d1 son datetime (desde y hasta, inclusive).
+    d0 y d1 son datetime (desde y hasta, inclusive). ``rol`` limita las
+    participaciones visibles a pick, pack u out (todo = sin limite).
     """
+    rol = (rol or "todo").lower()
+    if rol not in ("todo", "pick", "pack", "out"):
+        rol = "todo"
+    # Un filtro pedido con una identidad duplicada (p. ej. un favorito del
+    # navegador con el id de la cuenta generica) se resuelve al canonico,
+    # igual que los responsables del reporte.
+    filtro_id = _ALIAS_RESP_IDS.get(filtro_id or 0, filtro_id or 0)
+    # Ventana en hora de Ecuador (UTC-5): desde las 00:00 del dia "desde"
+    # hasta las 23:59:59 del dia "hasta", ambos inclusive en fecha local
+    # (05:00 UTC = 00:00 local; el dia "hasta" cierra 04:59:59 UTC del dia
+    # siguiente). Antes el dia "hasta" quedaba excluido en rangos de varios
+    # dias, porque el cierre se ponia a las 04:59:59 UTC del mismo dia.
     inicio = f"{d0:%Y-%m-%d} 05:00:00"
-    if d0.date() == d1.date():
-        dn = d1 + timedelta(days=1)
-        fin = f"{dn:%Y-%m-%d} 04:59:59"
-    else:
-        fin = f"{d1:%Y-%m-%d} 04:59:59"
+    fin = f"{d1 + timedelta(days=1):%Y-%m-%d} 04:59:59"
 
     vacio = {"ok": True, "user_id_filtro_aplicado": filtro_id,
              "kpi_promedios_generales": {"promedio_picking": "0h 0m",
@@ -728,21 +1250,46 @@ def build_despacho(empresa, filtro_id, d0, d1):
     if not sale_ids:
         return vacio
 
+    # Se traen TODAS las fases del pedido (completadas o abiertas) para poder
+    # aplicar la cadena PICK -> PACK -> OUT sin inventar estados. La fecha de
+    # origen del pedido solo se usa para el Lead Time, nunca como inicio de fase.
     bulk = sr("stock.picking",
-              [("sale_id", "in", sale_ids), ("state", "=", "done")],
-              ["id", "name", "picking_type_id", "date_done", "user_id", "create_date",
-               "sale_id", "partner_id"])
+              [("sale_id", "in", sale_ids), ("state", "!=", "cancel")],
+              ["id", "name", "picking_type_id", "state", "date_done", "user_id",
+               "create_date", "date_assigned_user", "sale_id", "partner_id",
+               "write_uid", "write_date", "x_studio_fecha_y_hora_de_orden"])
+
+    # Fechas reales de asignacion y cierre extraidas del Chatter (mail.message),
+    # en lugar de las fechas genericas de creacion del traslado.
+    tracking = _tracking_pickings([p["id"] for p in bulk])
+
+    # Fecha de confirmacion de cada orden de venta (date_order: en Odoo es la
+    # fecha de confirmacion de las ordenes ya validadas). Es la columna
+    # "Fecha y hora de confirmacion" del tablero y la referencia de inicio de
+    # los pedidos que no se asignaron a ningun despachador y fueron
+    # ejecutados directamente por los usuarios de despacho_confirmacion_directa.
+    confirmacion_pedido = {}
+    try:
+        for s in sr("sale.order", [("id", "in", sale_ids)], ["id", "date_order"]):
+            confirmacion_pedido[s["id"]] = s.get("date_order")
+    except Exception as exc:
+        print(f"[despacho] No se pudo leer la fecha de confirmacion de ordenes: {exc}")
 
     # Conteo de items por picking. Se consulta stock.move en lugar de traer el
     # one2many move_ids_without_package: con miles de pedidos esa respuesta
     # XML-RPC llega truncada y el reporte falla.
     conteo_items = {}
+    fin_por_picking = {}
     picking_ids = [p["id"] for p in bulk]
     for i in range(0, len(picking_ids), 500):
         for m in sr("stock.move", [("picking_id", "in", picking_ids[i:i + 500])],
-                    ["picking_id"]):
+                    ["picking_id", "state", "date"]):
             pid = id_of(m.get("picking_id"))
             conteo_items[pid] = conteo_items.get(pid, 0) + 1
+            # Hora efectiva en que cada movimiento pasa a "Hecho".
+            if m.get("state") == "done" and m.get("date"):
+                if not fin_por_picking.get(pid) or m["date"] > fin_por_picking[pid]:
+                    fin_por_picking[pid] = m["date"]
 
     por_pedido = {}
     for p in bulk:
@@ -751,24 +1298,74 @@ def build_despacho(empresa, filtro_id, d0, d1):
             por_pedido.setdefault(sid, []).append(p)
 
     fmt = "%Y-%m-%d %H:%M:%S"
+    ahora_dt = datetime.utcnow()
+    ahora = ahora_dt.strftime(fmt)
     resultados = []
     mapa_fechas_fin = {}
-
-    def mins(a, b):
-        return max(0, int((datetime.strptime(b, fmt) - datetime.strptime(a, fmt)).total_seconds() // 60))
+    fases_orden = (("pick", "picking"), ("pack", "packing"), ("out", "output"))
 
     def legible(m):
         h, mm = divmod(m, 60)
         return f"{h}h {mm}m"
 
+    def rank(datos):
+        return (1 if datos.get("completado") else 0, datos.get("fin_utc") or "",
+                datos.get("inicio_utc") or "")
+
+    def aplicar_tiempos(datos, prev_fin_dt):
+        """Espera + ejecucion de una fase, medida solo en horario laboral.
+
+        La espera corre desde el fin de la fase anterior hasta que esta fase
+        arranca (asignacion/creacion). Si el documento se creo antes de que la
+        fase anterior terminara, el inicio operativo se ajusta al fin anterior.
+        """
+        ini_dt = (datetime.strptime(datos["inicio_utc"], fmt)
+                  if datos.get("inicio_utc") else None)
+        ini_oper = ini_dt
+        if prev_fin_dt and ini_oper and ini_oper < prev_fin_dt:
+            ini_oper = prev_fin_dt
+        espera = _minutos_habiles(prev_fin_dt, ini_oper) if prev_fin_dt and ini_oper else 0
+        if datos.get("completado") and datos.get("fin_utc"):
+            fin_dt = datetime.strptime(datos["fin_utc"], fmt)
+        else:
+            fin_dt = ahora_dt
+        ejecucion = _minutos_habiles(ini_oper, fin_dt) if ini_oper and fin_dt else 0
+        # Una fase ya validada ('done') nunca se muestra como 0h 0m: si el
+        # traslado duro menos de un minuto se informa 1 minuto.
+        if datos.get("completado") and ejecucion == 0:
+            ejecucion = 1
+        datos["inicio_operativo_utc"] = ini_oper.strftime(fmt) if ini_oper else None
+        datos["espera_minutos"] = espera
+        datos["espera_legible"] = legible(espera)
+        datos["ejecucion_minutos"] = ejecucion
+        datos["ejecucion_legible"] = legible(ejecucion)
+        datos["minutos_netos"] = espera + ejecucion
+        datos["legible"] = legible(datos["minutos_netos"])
+        return fin_dt
+
+    def fase_info(datos):
+        return {"responsable": datos.get("responsable"),
+                "documento": datos.get("documento", ""),
+                "asignado": _fecha_hora_local(datos.get("asignado_utc")),
+                "inicio": _fecha_hora_local(datos.get("inicio_utc")),
+                "fin": _fecha_hora_local(datos.get("fin_utc")),
+                "estado": "completado" if datos.get("completado") else "en_proceso",
+                "completado": bool(datos.get("completado")),
+                "espera_minutos": datos.get("espera_minutos", 0),
+                "espera_legible": datos.get("espera_legible", "0h 0m"),
+                "ejecucion_minutos": datos.get("ejecucion_minutos", 0),
+                "ejecucion_legible": datos.get("ejecucion_legible", "0h 0m"),
+                "minutos_netos": datos.get("minutos_netos", 0),
+                "legible": datos.get("legible", "0h 0m")}
+
     for s_id in sale_ids:
         ops = por_pedido.get(s_id, [])
         if not ops:
             continue
-        fases = {"picking": None, "packing": None, "output": None}
+        todas = {"picking": None, "packing": None, "output": None}
+        visibles = {"picking": None, "packing": None, "output": None}
         nombre_pedido = f"ID: {s_id}"
         nombre_cliente = "Cliente no especificado"
-        incluir = False
         n_items = 0
         n_conting = 0
 
@@ -777,66 +1374,238 @@ def build_despacho(empresa, filtro_id, d0, d1):
                 nombre_pedido = p["sale_id"][1]
             if isinstance(p.get("partner_id"), (list, tuple)) and len(p["partner_id"]) > 1:
                 nombre_cliente = p["partner_id"][1]
-            operacion = (ref(p.get("picking_type_id")) or "").lower()
+            # Cada fase se identifica por su propio documento, de forma
+            # independiente: /PICK/, /PACK/ y /OUT/ en el nombre del traslado.
+            fase = _fase_por_documento(p.get("name"))
+            if not fase:
+                operacion = (ref(p.get("picking_type_id")) or "").lower()
+                if "pick" in operacion:
+                    fase = "picking"
+                elif any(x in operacion for x in ("pack", "emp", "prep")):
+                    fase = "packing"
+                elif any(x in operacion for x in ("out", "deliv", "salida", "entrega")):
+                    fase = "output"
+            if not fase:
+                continue
             resp_id = id_of(p.get("user_id")) or 0
-            resp_nom = ref(p.get("user_id")) or "No asignado"
-            if filtro_id == 0 or resp_id == filtro_id:
-                incluir = True
-            datos_fase = {"documento": p.get("name", ""), "responsable": resp_nom,
-                          "inicio_utc": p.get("create_date"), "fin_utc": p.get("date_done")}
+            completado = p.get("state") == "done"
+            tr = tracking.get(p.get("id")) or {}
+            # Responsable real de la fase: quien valido la operacion en Odoo
+            # (autor del mensaje de validacion en el Chatter). Si el traslado
+            # se asigno a una persona y lo ejecuto otra, manda quien lo
+            # ejecuto. Sin rastro de validacion queda el usuario asignado y,
+            # como ultimo recurso en traslados validados sin asignar, el
+            # write_uid de una escritura contemporanea a la validacion
+            # (ventana de 2 minutos): al validar, Odoo deja write_uid en
+            # quien valido, pero despues el personal de facturacion escribe
+            # el numero de autorizacion SRI en el mismo traslado y ese cambio
+            # posterior NO puede figurar como ejecucion de bodega.
+            validador_write = None
+            validador_write_id = 0
+            if completado and not tr.get("hecho_por"):
+                wd, dd = p.get("write_date"), p.get("date_done")
+                if wd and dd:
+                    try:
+                        delta = abs((datetime.fromisoformat(wd) -
+                                     datetime.fromisoformat(dd)).total_seconds())
+                        wuid = id_of(p.get("write_uid")) or 0
+                        if delta <= 120 and not _resp_excluido(wuid, ref(p.get("write_uid"))):
+                            validador_write_id, validador_write = _canon_usuario(
+                                wuid, ref(p.get("write_uid")))
+                    except ValueError:
+                        validador_write = None
+            # El usuario asignado tambien pasa por el mismo filtro: un
+            # excluido (facturacion) nunca figura como responsable y la fase
+            # queda sin responsable si no hay otro candidato.
+            resp_asignado = ref(p.get("user_id"))
+            if _resp_excluido(resp_id, resp_asignado):
+                resp_id, resp_asignado = 0, None
+            # Identidades duplicadas de una misma persona se reportan como el
+            # usuario canonico (nombre incluido).
+            resp_id, resp_asignado = _canon_usuario(resp_id, resp_asignado)
+            resp_nombre = (tr.get("hecho_por") or validador_write or
+                           resp_asignado or None)
+            # El filtro por despachador sigue al ejecutor real.
+            resp_filtro = (tr.get("hecho_por_id") or validador_write_id or
+                           resp_id or 0)
+            # Inicio operativo: asignacion registrada en el Chatter (cambio de
+            # user_id de vacio al despachador o paso a 'assigned'). Si no hay
+            # rastro de auditoria se usan las fechas del traslado como respaldo.
+            inicio_utc = (tr.get("asignado") or p.get("date_assigned_user") or
+                          p.get("create_date"))
+            # Cierre: date_done del stock.picking cuando su estado es 'done'
+            # (respaldo: cambio a 'Hecho' en el Chatter y ultimo stock.move).
+            fin_utc = None
+            if completado:
+                fin_utc = (p.get("date_done") or tr.get("hecho") or
+                           fin_por_picking.get(p.get("id")))
+            datos_fase = {
+                "documento": p.get("name", ""),
+                "responsable": resp_nombre,
+                "inicio_utc": inicio_utc,
+                "fin_utc": fin_utc,
+                "asignado_utc": (tr.get("asignado") or p.get("date_assigned_user") or
+                                 (p.get("create_date") if resp_id else None)),
+                "completado": completado,
+            }
             n_moves = conteo_items.get(p.get("id"), 0)
             if n_moves:
-                if "pick" in operacion:
+                if fase == "picking":
                     n_items = n_moves
                 elif n_conting == 0:
                     n_conting = n_moves
-            if "pick" in operacion:
-                fases["picking"] = datos_fase
-            elif any(x in operacion for x in ("pack", "emp", "prep")):
-                fases["packing"] = datos_fase
-            elif any(x in operacion for x in ("out", "deliv", "salida", "entrega")):
-                fases["output"] = datos_fase
+            if not todas[fase] or rank(datos_fase) > rank(todas[fase]):
+                todas[fase] = datos_fase
+            if filtro_id == 0 or resp_filtro == filtro_id:
+                if not visibles[fase] or rank(datos_fase) > rank(visibles[fase]):
+                    visibles[fase] = datos_fase
 
-        if not incluir:
+        if not any(visibles.values()):
             continue
+        if filtro_id and rol in ("pick", "pack", "out"):
+            fase_rol = {"pick": "picking", "pack": "packing", "out": "output"}[rol]
+            if not visibles.get(fase_rol):
+                continue
         if n_items == 0:
             n_items = n_conting
 
-        rep = {"pedido_id": s_id, "pedido_nombre": nombre_pedido, "cliente": nombre_cliente,
-               "total_items": int(n_items), "tiempos_fases_minutos": {},
-               "tiempos_fases_legible": {}, "detalles_operacion": {}}
+        # Pedidos que no se asignaron a ningun despachador y fueron ejecutados
+        # directamente (p.ej. Jesus Sanchez): sin asignacion que consultar, la
+        # referencia de inicio pasa a ser la fecha de confirmacion de la orden
+        # de venta. Solo se rellena la referencia (asignado/inicio del ciclo);
+        # el inicio operativo de cada fase y sus tiempos no se tocan.
+        if confirmacion_pedido:
+            sin_asignar = not any((tracking.get(p.get("id")) or {}).get("asignado") or
+                                  id_of(p.get("user_id")) or p.get("date_assigned_user")
+                                  for p in ops)
+            if sin_asignar:
+                directo = any(
+                    _ejecutor_directo_conf((tracking.get(p.get("id")) or {}).get("hecho_por_id"),
+                                           (tracking.get(p.get("id")) or {}).get("hecho_por"))
+                    for p in ops)
+                if directo:
+                    fecha_conf = confirmacion_pedido.get(s_id)
+                    if fecha_conf:
+                        for fase in ("picking", "packing", "output"):
+                            datos = todas.get(fase)
+                            if datos and not datos.get("asignado_utc"):
+                                datos["asignado_utc"] = fecha_conf
 
-        if fases["picking"]:
-            m = mins(fases["picking"]["inicio_utc"], fases["picking"]["fin_utc"])
-            rep["tiempos_fases_minutos"]["picking"] = m
-            rep["tiempos_fases_legible"]["picking"] = legible(m)
-            rep["detalles_operacion"]["picking"] = {"documento": fases["picking"]["documento"],
-                                                    "responsable": fases["picking"]["responsable"],
-                                                    "fecha": fases["picking"]["fin_utc"][:10]}
+        # Inicio del ciclo: cuando el pedido se asigna a un despachador
+        # (primer cambio de user_id registrado en el Chatter), no la fecha de
+        # confirmacion de la orden. Solo se usa para el Lead Time y la espera
+        # inicial del PICK.
+        inicio_ciclo = None
+        for fase in ("picking", "packing", "output"):
+            datos = todas.get(fase)
+            valor = datos.get("asignado_utc") if datos else None
+            if valor and (inicio_ciclo is None or valor < inicio_ciclo):
+                inicio_ciclo = valor
+        if not inicio_ciclo:
+            inicio_ciclo = next((p.get("x_studio_fecha_y_hora_de_orden") for p in ops
+                                 if p.get("x_studio_fecha_y_hora_de_orden")), None)
+        if not inicio_ciclo:
+            inicio_ciclo = min((p.get("create_date") for p in ops if p.get("create_date")),
+                               default=None)
+        prev_fin_dt = datetime.strptime(inicio_ciclo, fmt) if inicio_ciclo else None
+        ultimo_fin_dt = prev_fin_dt
 
-        if fases["packing"] and fases["picking"]:
-            m = mins(fases["picking"]["fin_utc"], fases["packing"]["fin_utc"])
-            rep["tiempos_fases_minutos"]["packing"] = m
-            rep["tiempos_fases_legible"]["packing"] = legible(m)
-            rep["detalles_operacion"]["packing"] = {"documento": fases["packing"]["documento"],
-                                                    "responsable": fases["packing"]["responsable"],
-                                                    "fecha": fases["packing"]["fin_utc"][:10]}
+        # Tiempo de cada fase = espera desde el fin anterior + ejecucion.
+        for clave, fase in fases_orden:
+            datos = todas.get(fase)
+            if not datos:
+                continue
+            prev_para_visible = prev_fin_dt
+            fin_dt = aplicar_tiempos(datos, prev_fin_dt)
+            visible = visibles.get(fase)
+            if visible is not None and visible is not datos:
+                aplicar_tiempos(visible, prev_para_visible)
+            if fin_dt:
+                ultimo_fin_dt = fin_dt
+                prev_fin_dt = fin_dt
 
-        if fases["output"]:
-            origen = fases["packing"] or fases["picking"]
-            if origen:
-                m = mins(origen["fin_utc"], fases["output"]["fin_utc"])
-                rep["tiempos_fases_minutos"]["output"] = m
-                rep["tiempos_fases_legible"]["output"] = legible(m)
-                rep["detalles_operacion"]["output"] = {"documento": fases["output"]["documento"],
-                                                       "responsable": fases["output"]["responsable"],
-                                                       "fecha": fases["output"]["fin_utc"][:10]}
+        rep = {"pedido_id": s_id, "pedido_nombre": nombre_pedido,
+               "cliente": nombre_cliente, "total_items": int(n_items),
+               "fases": {}, "tiempos_fases_minutos": {},
+               "tiempos_fases_legible": {}, "detalles_operacion": {},
+               "estados_fases": {},
+               "fecha_confirmacion": _fecha_hora_local(confirmacion_pedido.get(s_id))}
+
+        # Documentos de las tres operaciones, aunque el filtro de responsable
+        # oculte alguna fase: PICK / PACK / OUT.
+        rep["documentos"] = {clave: (todas.get(fase) or {}).get("documento", "")
+                             for clave, fase in fases_orden}
+
+        # Estado completo de la cadena, aunque el filtro oculte al responsable.
+        for clave, fase in fases_orden:
+            datos = todas.get(fase)
+            rep["estados_fases"][clave] = {
+                "existe": bool(datos),
+                "completado": bool(datos and datos.get("completado")),
+            }
+
+        for clave, fase in fases_orden:
+            datos = visibles.get(fase)
+            if not datos:
+                continue
+            info = fase_info(datos)
+            rep["fases"][clave] = info
+            rep["tiempos_fases_minutos"][fase] = info["minutos_netos"]
+            rep["tiempos_fases_legible"][fase] = info["legible"]
+            rep["detalles_operacion"][fase] = {
+                "documento": datos.get("documento", ""),
+                "responsable": datos.get("responsable"),
+                "asignado": _fecha_hora_local(datos.get("asignado_utc")),
+                # Fecha de referencia en hora local (antes se recortaba el
+                # texto en UTC): es el dia en que la fase se completo (o
+                # arranco si sigue abierta), sin desfase de zona horaria.
+                "fecha": _fecha_local_corta(datos.get("fin_utc") or datos.get("inicio_utc")),
+                "completado": bool(datos.get("completado")),
+            }
+            rep[f"responsable_{clave}"] = info["responsable"]
+            rep[f"inicio_{clave}"] = info["inicio"]
+            rep[f"fin_{clave}"] = info["fin"]
+            rep[f"minutos_{clave}"] = info["minutos_netos"]
+            rep[f"tiempo_{clave}"] = info["legible"]
+
+        # Lead Time: desde la creacion del pedido hasta la ultima fase
+        # ejecutada, o hasta ahora si la fase actual sigue abierta.
+        lead = None
+        if ultimo_fin_dt:
+            desde_dt = datetime.strptime(inicio_ciclo, fmt) if inicio_ciclo else None
+            if desde_dt is None:
+                primera = todas["picking"] or todas["packing"] or todas["output"]
+                desde_dt = (datetime.strptime(primera["inicio_operativo_utc"], fmt)
+                            if primera and primera.get("inicio_operativo_utc") else None)
+            if desde_dt:
+                lead = _minutos_habiles(desde_dt, ultimo_fin_dt)
+        rep["lead_time_minutos"] = lead
+        rep["lead_time_legible"] = legible(lead) if lead is not None else None
+
+        # Ciclo total del pedido: asignacion al despachador -> date_done de la
+        # ultima fase (OUT cuando existe). Si esa fase ya esta 'done' el reloj
+        # se congela con su date_done y no usa la fecha actual.
+        fase_ciclo = ("output" if todas.get("output") else
+                      ("packing" if todas.get("packing") else "picking"))
+        datos_ciclo = todas.get(fase_ciclo) or {}
+        fin_ciclo = (datos_ciclo.get("fin_utc")
+                     if datos_ciclo.get("completado") else None)
+        inicio_ciclo_dt = datetime.strptime(inicio_ciclo, fmt) if inicio_ciclo else None
+        ciclo = None
+        if fin_ciclo and inicio_ciclo_dt:
+            ciclo = _minutos_habiles(inicio_ciclo_dt,
+                                     datetime.strptime(fin_ciclo, fmt))
+        rep["terminado"] = bool(datos_ciclo.get("completado"))
+        rep["ciclo_total_minutos"] = ciclo
+        rep["ciclo_total_legible"] = legible(ciclo) if ciclo is not None else None
 
         if rep["tiempos_fases_minutos"]:
+            fase_final = ("output" if "output" in rep["detalles_operacion"] else
+                          ("packing" if "packing" in rep["detalles_operacion"] else "picking"))
+            rep["fecha_asignacion"] = rep["detalles_operacion"][fase_final]["asignado"]
             resultados.append(rep)
-            fase_final = "output" if "output" in rep["detalles_operacion"] else (
-                "packing" if "packing" in rep["detalles_operacion"] else "picking")
-            mapa_fechas_fin[s_id] = datetime.strptime(fases[fase_final]["fin_utc"], fmt)
+            fin_jornada = visibles[fase_final].get("fin_utc") or ahora
+            mapa_fechas_fin[s_id] = datetime.strptime(fin_jornada, fmt)
 
     if not resultados:
         return vacio
@@ -847,6 +1616,10 @@ def build_despacho(empresa, filtro_id, d0, d1):
         det = r["detalles_operacion"]
         fase_final = "output" if "output" in det else ("packing" if "packing" in det else "picking")
         nombre = det[fase_final]["responsable"]
+        if not nombre:
+            r["tiempo_espera_previo_minutos"] = 0
+            r["tiempo_espera_previo_legible"] = "Sin asignar"
+            continue
         jornadas.setdefault(nombre, []).append(
             {"pedido": r, "fecha_fin": mapa_fechas_fin.get(r["pedido_id"], datetime.min)})
 
@@ -854,11 +1627,16 @@ def build_despacho(empresa, filtro_id, d0, d1):
         lista.sort(key=lambda x: x["fecha_fin"])
         for i, item in enumerate(lista):
             pedido = item["pedido"]
-            if i == 0:
+            if pedido.get("terminado"):
+                # El ciclo ya cerro (OUT 'done'): se congela el cronometro y
+                # se informa el estado final en lugar de una espera abierta.
+                pedido["tiempo_espera_previo_minutos"] = pedido.get("ciclo_total_minutos") or 0
+                pedido["tiempo_espera_previo_legible"] = "Terminado"
+            elif i == 0:
                 pedido["tiempo_espera_previo_minutos"] = 0
                 pedido["tiempo_espera_previo_legible"] = "Inicio de jornada"
             else:
-                brecha = max(0, int((item["fecha_fin"] - lista[i - 1]["fecha_fin"]).total_seconds() // 60))
+                brecha = _minutos_habiles(lista[i - 1]["fecha_fin"], item["fecha_fin"])
                 pedido["tiempo_espera_previo_minutos"] = brecha
                 pedido["tiempo_espera_previo_legible"] = legible(brecha)
 
@@ -875,9 +1653,9 @@ def build_despacho(empresa, filtro_id, d0, d1):
             "detalles_por_pedido": resultados}
 
 
-def build_despacho_xlsx(empresa, filtro_id, d0, d1, responsable=""):
+def build_despacho_xlsx(empresa, filtro_id, d0, d1, responsable="", rol="todo"):
     """Exporta el dashboard de tiempos de despacho (misma salida que la app externa)."""
-    rep = build_despacho(empresa, filtro_id, d0, d1)
+    rep = build_despacho(empresa, filtro_id, d0, d1, rol)
     pedidos = list(rep.get("detalles_por_pedido", []))
     responsable = (responsable or "").strip()
 
@@ -897,6 +1675,12 @@ def build_despacho_xlsx(empresa, filtro_id, d0, d1, responsable=""):
                 return v
         return "\u2014"
 
+    def docs_de(p):
+        """Documentos de las tres operaciones (PICK / PACK / OUT)."""
+        docs = p.get("documentos") or {}
+        partes = [docs.get(k) for k in ("pick", "pack", "out") if docs.get(k)]
+        return " / ".join(partes) or first(p, "documento")
+
     if responsable:
         pedidos = [p for p in pedidos if resp_de(p) == responsable]
 
@@ -905,9 +1689,12 @@ def build_despacho_xlsx(empresa, filtro_id, d0, d1, responsable=""):
     ws.title = "Despacho"
     ws["A1"] = f"TIEMPOS DE DESPACHO \u2014 {d0:%d/%m/%Y} \u2013 {d1:%d/%m/%Y}"
     ws["A1"].font = TITLE_FONT
-    headers = ["Pedido", "Cliente", "Responsable", "Documento", "Items",
-               "Picking (min)", "Picking", "Packing (min)", "Packing",
-               "Output (min)", "Output", "Espera Previo (min)", "Espera Previo"]
+    headers = ["Pedido", "Cliente", "Items",
+               "Resp. PICK", "Inicio PICK", "Fin PICK", "PICK total (min)",
+               "Resp. PACK", "Inicio PACK", "Fin PACK", "PACK total (min)",
+               "Resp. OUT", "Inicio OUT", "Fin OUT", "OUT total (min)",
+               "Documento", "Fecha y hora de confirmación", "Espera entre pedidos (min)", "Espera entre pedidos",
+               "Trans. PICK\u2192PACK", "Trans. PACK\u2192OUT", "Lead Time"]
     head_row = 3
     for c, h in enumerate(headers, start=1):
         cell = ws.cell(row=head_row, column=c, value=h)
@@ -916,27 +1703,45 @@ def build_despacho_xlsx(empresa, filtro_id, d0, d1, responsable=""):
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = BORDER
     for i, p in enumerate(pedidos, start=1):
-        mn = p.get("tiempos_fases_minutos", {})
-        lg = p.get("tiempos_fases_legible", {})
-        vals = [p.get("pedido_nombre"), p.get("cliente"), first(p, "responsable"),
-                first(p, "documento"), p.get("total_items", 0),
-                mn.get("picking", 0), lg.get("picking", "\u2014"),
-                mn.get("packing", 0), lg.get("packing", "\u2014"),
-                mn.get("output", 0), lg.get("output", "\u2014"),
+        fase_pick = p.get("fases", {}).get("pick") or {}
+        fase_pack = p.get("fases", {}).get("pack") or {}
+        fase_out = p.get("fases", {}).get("out") or {}
+        trans = p.get("transiciones") or {}
+        vals = [p.get("pedido_nombre"), p.get("cliente"), p.get("total_items", 0),
+                fase_pick.get("responsable", "\u2014"),
+                fase_pick.get("inicio", "\u2014"),
+                fase_pick.get("fin", "\u2014"),
+                fase_pick.get("minutos_netos", 0),
+                fase_pack.get("responsable", "\u2014"),
+                fase_pack.get("inicio", "\u2014"),
+                fase_pack.get("fin", "\u2014"),
+                fase_pack.get("minutos_netos", 0),
+                fase_out.get("responsable", "\u2014"),
+                fase_out.get("inicio", "\u2014"),
+                fase_out.get("fin", "\u2014"),
+                fase_out.get("minutos_netos", 0),
+                docs_de(p), p.get("fecha_confirmacion") or p.get("fecha_asignacion") or "\u2014",
                 p.get("tiempo_espera_previo_minutos", 0),
-                p.get("tiempo_espera_previo_legible", "\u2014")]
+                p.get("tiempo_espera_previo_legible", "\u2014"),
+                (trans.get("pick_pack") or {}).get("legible", "\u2014"),
+                (trans.get("pack_out") or {}).get("legible", "\u2014"),
+                p.get("lead_time_legible") or "\u2014"]
         for c, v in enumerate(vals, start=1):
             cell = ws.cell(row=head_row + i, column=c, value=v)
             cell.border = BORDER
-            if c in (6, 8, 10, 12):
+            if c in (7, 11, 15, 18):
                 cell.number_format = "#,##0"
             if i % 2 == 0:
                 cell.fill = PatternFill("solid", fgColor="F8FAFC")
-    widths = [16, 30, 20, 18, 8, 13, 10, 13, 10, 13, 10, 17, 14]
+    widths = [16, 30, 8,
+              20, 17, 17, 13,
+              20, 17, 17, 13,
+              20, 17, 17, 13,
+              18, 17, 17, 14, 16, 16, 14]
     for c, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(c)].width = w
     ws.freeze_panes = ws.cell(row=head_row + 1, column=1)
-    ws.auto_filter.ref = f"A{head_row}:M{head_row + len(pedidos)}"
+    ws.auto_filter.ref = f"A{head_row}:V{head_row + len(pedidos)}"
     ws.row_dimensions[head_row].height = 28
 
     buf = io.BytesIO()
@@ -1147,8 +1952,12 @@ class Handler(BaseHTTPRequestHandler):
                 filas = conciliacion_empresa(cid, int(one("limite", "50") or 50))
                 return self._json(200, {"empresa": cid, "conciliaciones": filas})
             if u.path == "/api/despachadores":
-                filas = sr("res.users", [("active", "=", True)], ["id", "name"], order="name asc")
-                return self._json(200, [{"id": r["id"], "nombre": r["name"]} for r in filas])
+                # Solo quienes figuran como responsables del tablero
+                # (asignados o validadores de las fases PICK/PACK/OUT, de
+                # cualquiera de las companias), no todos los usuarios de
+                # Odoo: ventas, administracion y cuentas sin actividad de
+                # bodega no aparecen en el filtro.
+                return self._json(200, _despachadores_tablero())
             if u.path == "/api/despacho":
                 try:
                     d0 = datetime.strptime(one("desde", ""), "%Y-%m-%d")
@@ -1166,7 +1975,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(400, {"error": "empresa",
                                             "mensaje": "Seleccione una compa\u00f1\u00eda."})
                 user_id = int(one("user_id", "0") or 0)
-                return self._json(200, build_despacho(empresa, user_id, d0, d1))
+                rol = (one("rol", "todo") or "todo").lower()
+                return self._json(200, build_despacho(empresa, user_id, d0, d1, rol))
             if u.path == "/api/despacho/export":
                 try:
                     d0 = datetime.strptime(one("desde", ""), "%Y-%m-%d")
@@ -1184,7 +1994,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(400, {"error": "empresa",
                                             "mensaje": "Seleccione una compa\u00f1\u00eda."})
                 user_id = int(one("user_id", "0") or 0)
-                data = build_despacho_xlsx(empresa, user_id, d0, d1, one("responsable", ""))
+                rol = (one("rol", "todo") or "todo").lower()
+                data = build_despacho_xlsx(empresa, user_id, d0, d1,
+                                           one("responsable", ""), rol)
                 fname = f"despacho_{datetime.now():%Y%m%d_%H%M}.xlsx"
                 return self._send(200, data,
                                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1266,6 +2078,9 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/auth/logout":
                 odoo_auth.cerrar_sesion(self._cookie_token())
                 return self._json(200, {"ok": True}, {"Set-Cookie": self._borrar_cookie()})
+            usr, cortado = self._requiere()
+            if cortado:
+                return
             if u.path == "/api/sync/sincronizar":
                 if not permisos.puede(usr["id"], "kardex"):
                     return self._json(403, {"error": "sin_permiso",

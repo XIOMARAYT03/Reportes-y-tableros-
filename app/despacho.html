@@ -74,6 +74,17 @@
   button:disabled{opacity:.55;cursor:not-allowed}
   button.green{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600;font-size:12.5px}
   .status{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:7px;align-self:center}
+  .rolbar{display:none;flex-wrap:wrap;gap:7px;align-items:center;background:#fff;
+          border:1px solid var(--line);border-radius:12px;padding:9px 14px}
+  .rolbar > span{font-size:10.5px;font-weight:800;letter-spacing:.5px;
+                 text-transform:uppercase;color:#475569;margin-right:4px}
+  .rolbar .rol{font-size:12px;font-weight:600;color:#475569;background:#f8fafc;
+               border:1px solid var(--line);padding:6px 12px;border-radius:999px}
+  .rolbar .rol:hover{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+  .rolbar .rol.on{background:#0f172a;border-color:#0f172a;color:#fff}
+  .sin-dueno{color:#b45309;font-weight:600;font-size:12px;white-space:nowrap}
+  .tl-lead{margin-top:4px;padding-top:4px;border-top:1px dashed #e2e8f0;
+           font-size:10.5px;color:var(--muted);white-space:nowrap}
   .legend{display:flex;flex-wrap:wrap;gap:7px;padding:9px 16px 4px}
   .lg{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:#334155;
       padding:4px 11px;border-radius:999px;border:1px solid var(--line);background:#f8fafc}
@@ -132,10 +143,23 @@
           border:1px solid var(--line);border-radius:5px;padding:2px 7px}
   .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:600;
         background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;white-space:nowrap}
-  .espera{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
-  .pill.hito.picking{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
-  .pill.hito.packing{background:#ecfeff;color:#0e7490;border-color:#a5f3fc}
-  .pill.hito.output{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
+  #blockMensual{flex:none}
+  .mensual-body{padding:14px 18px 18px}
+  .winner{display:flex;flex-wrap:wrap;gap:16px 24px;align-items:center;justify-content:space-between;
+          border:1px solid #a7f3d0;background:linear-gradient(135deg,#ecfdf5,#f0fdfa);
+          border-radius:14px;padding:16px 20px}
+  .winner .who{display:flex;align-items:center;gap:14px;min-width:0}
+  .winner .medal{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;
+                 font-size:20px;font-weight:800;color:#fff;
+                 background:linear-gradient(135deg,#fbbf24,#f59e0b);flex:none}
+  .winner .name{font-size:19px;font-weight:800;line-height:1.15}
+  .winner .sub{font-size:12px;color:#047857;font-weight:600}
+  .winner .stats{display:flex;flex-wrap:wrap;gap:10px}
+  .winner .stat{min-width:118px;background:#fff;border:1px solid #d1fae5;border-radius:10px;
+                padding:8px 14px;text-align:center}
+  .winner .stat span{display:block;font-size:9.5px;font-weight:800;letter-spacing:.6px;
+                     text-transform:uppercase;color:#64748b}
+  .winner .stat b{font-size:18px;font-variant-numeric:tabular-nums;color:#065f46}
   .empty{padding:28px;text-align:center;color:var(--muted)}
   .denied{max-width:560px;margin:60px auto;background:#fff;border:1px solid var(--line);border-radius:14px;
           padding:34px;text-align:center}
@@ -147,9 +171,9 @@
   .tl-row{display:grid;grid-template-columns:46px 1fr 60px;gap:10px;align-items:center}
   .tl-lab{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
           color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .tl-track{display:block;height:10px;background:#eef2f7;border-radius:999px;overflow:hidden;
+  .tl-track{height:10px;background:#eef2f7;border-radius:999px;overflow:hidden;
             border:1px solid #e2e8f0}
-  .tl-fill{display:block;height:100%;border-radius:999px}
+  .tl-fill{display:block;height:100%;min-width:0}
   .tl-fill.picking{background:#1d4ed8}
   .tl-fill.packing{background:#0891b2}
   .tl-fill.output{background:#047857}
@@ -158,6 +182,41 @@
   .tl-row.off .tl-lab{color:#94a3b8}
   .tl-row.off .tl-track{background:#f8fafc;border-style:dashed}
   .tl-row.off .tl-time{color:#94a3b8;font-weight:500}
+
+  /* ---- Productividad: promedio por etapa y gráficos por fase ---- */
+  .prod-prom{padding:14px 18px 16px}
+  .prod-fases{padding:14px 18px 18px;border-top:1px solid var(--line)}
+  .prod-title{margin:0 0 10px;font-size:11.5px;font-weight:800;letter-spacing:.6px;
+              text-transform:uppercase;color:#475569;display:flex;flex-wrap:wrap;
+              gap:4px 10px;align-items:baseline}
+  .prom-row{display:grid;grid-template-columns:42px 1fr 74px;gap:9px;align-items:center;margin-bottom:10px}
+  .prom-lab{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#475569}
+  .prom-track{display:block;height:16px;background:#eef2f7;border-radius:5px;overflow:hidden;
+              border:1px solid #e2e8f0}
+  .prom-fill{display:block;height:100%;min-width:0}
+  .prom-fill.picking{background:#1d4ed8}
+  .prom-fill.packing{background:#0891b2}
+  .prom-fill.output{background:#047857}
+  .prom-val{font-size:11.5px;font-weight:700;text-align:right;color:#334155;
+            font-variant-numeric:tabular-nums;white-space:nowrap}
+  .fases-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .pf{min-width:0;border:1px solid var(--line);border-radius:10px;padding:12px 13px;background:#fbfcfe}
+  .pf-head{display:flex;align-items:center;gap:7px;font-size:10.5px;font-weight:800;
+           letter-spacing:.5px;text-transform:uppercase;color:#475569;margin-bottom:11px}
+  .pf-dot{width:9px;height:9px;border-radius:3px;flex:none}
+  .pf-dot.picking{background:#1d4ed8}
+  .pf-dot.packing{background:#0891b2}
+  .pf-dot.output{background:#047857}
+  .pf-row{display:grid;grid-template-columns:minmax(92px,36%) 1fr 28px;gap:8px;align-items:center;margin-bottom:8px}
+  .pf-name{font-size:11px;font-weight:600;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pf-track{display:block;height:12px;background:#e8edf3;border-radius:4px;overflow:hidden}
+  .pf-bar{display:block;height:100%;border-radius:4px;min-width:2px}
+  .pf-bar.picking{background:#1d4ed8}
+  .pf-bar.packing{background:#0891b2}
+  .pf-bar.output{background:#047857}
+  .pf-val{font-size:11px;font-weight:800;text-align:right;color:#334155;font-variant-numeric:tabular-nums}
+  .pf-empty{font-size:11.5px;color:var(--muted);padding:8px 0 4px}
+  .pf-more{font-size:10.5px;color:#94a3b8;margin-top:6px}
 
   .spin{width:13px;height:13px;border:2px solid #cbd5e1;border-top-color:var(--brand);border-radius:50%;
         display:inline-block;animation:sp .8s linear infinite}
@@ -170,6 +229,7 @@
     #blockChart{height:auto;min-height:320px}
     #blockTable{min-height:60vh}
     .tl{min-width:210px}
+    .fases-grid{grid-template-columns:1fr}
   }
 </style>
 </head>
@@ -214,6 +274,14 @@
       <label>Despachador
         <select id="selUser"><option value="0">Todos</option></select>
       </label>
+      <label>Actividad
+        <select id="selFase" title="Filtra pedidos, gr&aacute;fico y tabla por la fase elegida: responsable y tiempos de esa actividad">
+          <option value="todo">Todas</option>
+          <option value="pick">Pick</option>
+          <option value="pack">Pack</option>
+          <option value="out">Out</option>
+        </select>
+      </label>
       <label>Desde<input type="date" id="fDesde"></label>
       <label>Hasta<input type="date" id="fHasta"></label>
       <button class="green" id="btnGen">Generar reporte</button>
@@ -222,12 +290,21 @@
     </div>
   </section>
 
+  <!-- ========== 1b. PARTICIPACI&Oacute;N DEL DESPACHADOR SELECCIONADO ========== -->
+  <section class="rolbar" id="rolTabs" aria-label="Filtro de participaci&oacute;n">
+    <span>Participaci&oacute;n</span>
+    <button type="button" class="rol on" data-rol="todo">Ver todo</button>
+    <button type="button" class="rol" data-rol="pick">Como Picker</button>
+    <button type="button" class="rol" data-rol="pack">Como Packer</button>
+    <button type="button" class="rol" data-rol="out">Como Despachador</button>
+  </section>
+
   <!-- ========== 2. GR&Aacute;FICO CENTRAL: PEDIDOS POR D&Iacute;A Y RESPONSABLE ========== -->
   <section class="block" id="blockChart">
     <div class="chart-head">
       <div>
         <h2>Pedidos por d&iacute;a y responsable</h2>
-        <span class="hint">Cada d&iacute;a muestra una barra independiente por operario (incluye &laquo;No asignado&raquo;); el n&uacute;mero sobre cada barra es la cantidad de pedidos. Oculte responsables desde la leyenda.</span>
+        <span class="hint">Cada d&iacute;a muestra una barra independiente por operario; el n&uacute;mero sobre cada barra es la cantidad de pedidos. Solo se grafican pedidos con responsable y cuya fase de referencia ocurri&oacute; dentro del rango de fechas. Oculte responsables desde la leyenda.</span>
       </div>
       <button type="button" class="fs-btn" id="btnFS">&#9685; Pantalla completa</button>
     </div>
@@ -239,13 +316,40 @@
     </div>
   </section>
 
-  <!-- ========== 3. TABLA DE DETALLE ========== -->
+  <!-- ========== 3. PRODUCTIVIDAD: promedio por etapa y gráficos por etapa ========== -->
+  <section class="block" id="blockProd">
+    <div class="tbl-head">
+      <h2>Productividad de los trabajadores</h2>
+      <span class="hint" id="prodCount"></span>
+    </div>
+    <div class="prod-prom">
+      <h3 class="prod-title">Tiempo promedio por etapa</h3>
+      <div id="promHost"><div class="empty">Genere el reporte para ver los promedios.</div></div>
+    </div>
+    <div class="prod-fases">
+      <h3 class="prod-title">Productividad por etapa</h3>
+      <div class="fases-grid" id="fasesHost"><div class="empty">Genere el reporte para ver la productividad por etapa.</div></div>
+    </div>
+  </section>
+
+  <!-- ========== 4. TABLA DE DETALLE ========== -->
   <section class="block" id="blockTable">
     <div class="tbl-head">
       <h2>Tabla de detalle</h2>
       <span class="hint" id="tblCount"></span>
     </div>
     <div class="tbl-scroll" id="tableHost"></div>
+  </section>
+
+  <!-- ========== 5. MEJOR DESPACHADOR MENSUAL ========== -->
+  <section class="block" id="blockMensual">
+    <div class="tbl-head">
+      <h2>Mejor despachador mensual</h2>
+      <span class="hint" id="mensualCount">Pedidos y tiempo promedio de ejecuci&oacute;n por actividad del mes.</span>
+    </div>
+    <div class="mensual-body" id="mensualHost">
+      <div class="empty">Genere el reporte para visualizar al mejor despachador.</div>
+    </div>
   </section>
 
 </main>
@@ -275,11 +379,34 @@ const FASES_TL = [
   { k: "packing", lab: "Pack" },
   { k: "output",  lab: "Out" }
 ];
-const HITO = { picking: "Pick", packing: "Pack", output: "Out" };
+const FASE_KEY = { picking: "pick", packing: "pack", output: "out" };
 const OCULTAS = new Set();   // responsables desactivados desde la leyenda
 let FILAS = [];              // detalles_por_pedido (fuente de la tabla)
+let RANGO = { desde: null, hasta: null };  // fechas YYYY-MM-DD del ultimo reporte generado
 let MENSAJE_VACIO = "";
 let sortAsc = true;          // orden de la columna Pedido
+let ROL = "todo";            // pestaña de participacion: todo | pick | pack | out
+const ROL_LABEL = { todo: "ver todo", pick: "Picker", pack: "Packer", out: "Despachador" };
+const SIN_DUENO = { pick: "Por iniciar Picking", pack: "En cola de Packing", out: "Pendiente de Despacho" };
+const FASE_ETIQUETA = { todo: "Todas", pick: "Pick", pack: "Pack", out: "Out" };
+
+function filasRol(rows) {
+  if (ROL === "todo") return rows;
+  return rows.filter(r => (r.fases || {})[ROL]);
+}
+
+function mensajeRol() {
+  return ROL === "todo" ? MENSAJE_VACIO
+    : `Sin pedidos con actividad ${FASE_ETIQUETA[ROL]} en el rango seleccionado.`;
+}
+
+function actualizarTabs() {
+  const mostrar = $("#selUser").value !== "0" && FILAS.length > 0;
+  $("#rolTabs").style.display = mostrar ? "flex" : "none";
+  document.querySelectorAll("#rolTabs .rol").forEach(
+    b => b.classList.toggle("on", b.dataset.rol === ROL));
+  $("#selFase").value = ROL;
+}
 
 function modalError(msg, titulo = "No se pudo completar") {
   $("#eTitle").textContent = titulo;
@@ -344,7 +471,31 @@ $("#legend").addEventListener("click", e => {
   if (!b) return;
   const k = b.dataset.k;
   if (OCULTAS.has(k)) OCULTAS.delete(k); else OCULTAS.add(k);
-  renderChart(FILAS);
+  renderChart(filasRol(FILAS));
+});
+
+/* ---------------- pestañas de participacion del despachador ---------------- */
+$("#rolTabs").addEventListener("click", e => {
+  const b = e.target.closest(".rol");
+  if (!b) return;
+  ROL = b.dataset.rol;
+  actualizarTabs();
+  pintar();
+});
+$("#selUser").addEventListener("change", () => {
+  ROL = "todo";
+  actualizarTabs();
+  if (FILAS.length) pintar();
+});
+
+/* ---------------- filtro por actividad: pick / pack / out ---------------- */
+/* Funciona junto al filtro de despachador (o solo): filtra la tabla y el
+   grafico a los pedidos con esa fase, graficando la fecha y el responsable
+   de la actividad elegida; los tiempos por fase siguen en la tabla. */
+$("#selFase").addEventListener("change", () => {
+  ROL = $("#selFase").value;
+  actualizarTabs();
+  if (FILAS.length) pintar();
 });
 
 /* ---------------- pantalla completa del gráfico ---------------- */
@@ -364,21 +515,36 @@ document.addEventListener("keydown", e => {
 });
 
 /* ---------------- gráfico central: pedidos por día y responsable ---------------- */
+const ROL_FASE = { pick: "picking", pack: "packing", out: "output" };
+
 function ultimaFase(r) {
   const det = r.detalles_operacion || {};
   return ["output", "packing", "picking"].find(k => det[k]);
 }
 
+/* Etapa que se grafica: la participación elegida o, en "ver todo", la última
+   etapa que ejecutó el despachador encargado del pedido. */
+function faseGrafico(r) {
+  return ROL !== "todo" ? ROL_FASE[ROL] : ultimaFase(r);
+}
+
 function respDe(r) {
-  const ult = ultimaFase(r);
-  const det = ult ? r.detalles_operacion[ult] : null;
-  return (det && det.responsable) || "No asignado";
+  const k = faseGrafico(r);
+  const det = r.detalles_operacion || {};
+  return (det[k] || {}).responsable || null;
 }
 
 function fechaDe(r) {
-  const ult = ultimaFase(r);
-  const det = ult ? r.detalles_operacion[ult] : null;
+  const k = faseGrafico(r);
+  const det = k ? r.detalles_operacion[k] : null;
   return det && det.fecha ? det.fecha : null;
+}
+
+/* Etiqueta del eje horizontal: DD/MM (o DD/MM/YYYY para el tooltip). */
+function fechaEtiqueta(iso, completa) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || "")) return iso || "";
+  const [a, m, d] = iso.split("-");
+  return completa ? `${d}/${m}/${a}` : `${d}/${m}`;
 }
 
 function agrupar(rows) {
@@ -386,7 +552,14 @@ function agrupar(rows) {
   rows.forEach(r => {
     const f = fechaDe(r);
     if (!f) return;
+    // Mismo filtro Desde/Hasta del reporte: la fase de referencia del
+    // pedido debe haber ocurrido dentro del rango consultado. Sin esto,
+    // fases abiertas desde octubre (fecha de asignacion/creacion) o
+    // completadas fuera del rango generaban columnas fuera de periodo.
+    if (RANGO.desde && f < RANGO.desde) return;
+    if (RANGO.hasta && f > RANGO.hasta) return;
     const resp = respDe(r);
+    if (!resp) return;  // pedidos sin ningun responsable no se grafican
     const d = dias[f] || (dias[f] = {});
     d[resp] = (d[resp] || 0) + 1;
     tot[resp] = (tot[resp] || 0) + 1;
@@ -397,7 +570,7 @@ function agrupar(rows) {
   return { dias, tot, orden, col };
 }
 
-function renderChart(rows) {
+function renderChart(rows, vacio) {
   const g = agrupar(rows);
   const days = Object.keys(g.dias).sort();
   const visibles = g.orden.filter(n => !OCULTAS.has(n));
@@ -407,7 +580,7 @@ function renderChart(rows) {
     `<i style="background:${g.col[n]}"></i>${esc(n)} &middot; ${g.tot[n]}</button>`).join("");
 
   if (!days.length) {
-    $("#chartArea").innerHTML = `<div class="chart-empty">${esc(MENSAJE_VACIO || "Sin datos para graficar en el rango seleccionado.")}</div>`;
+    $("#chartArea").innerHTML = `<div class="chart-empty">${esc(vacio || MENSAJE_VACIO || "Sin datos para graficar en el rango seleccionado.")}</div>`;
     return;
   }
   if (!visibles.length) {
@@ -445,7 +618,7 @@ function renderChart(rows) {
   }).join("");
 
   const xlabels = days.map(d0 =>
-    `<span class="xl" title="${esc(d0)}">${d0.slice(8, 10)}</span>`
+    `<span class="xl" title="${esc(fechaEtiqueta(d0, true))}">${esc(fechaEtiqueta(d0))}</span>`
   ).join("");
 
   $("#chartArea").innerHTML = `<div class="plot">
@@ -456,58 +629,101 @@ function renderChart(rows) {
 }
 
 /* ---------------- tabla de detalle: 7 columnas ---------------- */
-function celdaMultifase(r) {
+function celdaMultifase(r, maxComun) {
   const mn = r.tiempos_fases_minutos || {}, lg = r.tiempos_fases_legible || {};
-  const max = Math.max(1, ...FASES_TL.map(f => mn[f.k] || 0));
+  const fases = r.fases || {};
+  // Escala comun: todas las barras de la tabla son proporcionales al mismo
+  // maximo (la fase mas larga de todo el conjunto filtrado), para que la
+  // longitud sea comparable entre pedidos.
+  const max = Math.max(1, Number(maxComun) || 0);
   const filas = FASES_TL.map(f => {
     const v = mn[f.k], tiene = v != null;
-    const pct = tiene ? (v > 0 ? Math.max(3, Math.round(v / max * 100)) : 0) : 0;
-    return `<div class="tl-row${tiene ? "" : " off"}">
+    const info = fases[FASE_KEY[f.k]] || {};
+    const finTxt = info.fin || (info.completado ? "\u2014" : "En curso");
+    const title = tiene
+      ? `Responsable: ${info.responsable || "\u2014"} | Inicio: ${info.inicio || "\u2014"} | Fin: ${finTxt} | ` +
+        `Espera: ${info.espera_legible || "0h 0m"} + Ejecuci\u00f3n: ${info.ejecucion_legible || "0h 0m"} = ${info.legible || "\u2014"}`
+      : "";
+    const pct = tiene && v > 0 ? Math.max(0.75, v / max * 100) : 0;
+    return `<div class="tl-row${tiene ? "" : " off"}"${title ? ` title="${esc(title)}"` : ""}>
         <span class="tl-lab">${f.lab}</span>
-        <span class="tl-track"><span class="tl-fill ${f.k}" style="width:${pct}%"></span></span>
+        <span class="tl-track"><span class="tl-fill ${f.k}" style="width:${pct.toFixed(2)}%"></span></span>
         <span class="tl-time">${tiene ? esc(lg[f.k]) : "\u2014"}</span>
       </div>`;
-  }).join("");
-  return `<div class="tl">${filas}</div>`;
+    }).join("");
+  const tr = r.transiciones || {};
+  const detalle = [tr.pick_pack, tr.pack_out].filter(Boolean)
+    .map(t => t.legible).join(" \u00b7 ");
+  const pie = r.lead_time_legible
+    ? `<div class="tl-lead" title="Transiciones PICK\u2192PACK / PACK\u2192OUT: ${esc(detalle || "\u2014")}">Lead time: ${esc(r.lead_time_legible)}</div>`
+    : "";
+  return `<div class="tl">${filas}${pie}</div>`;
 }
 
-function renderTable() {
+function faseBloqueada(r, k) {
+  if (k === "pick") return false;
+  const prev = k === "pack" ? "pick" : "pack";
+  const e = (r.estados_fases || {})[prev];
+  // Solo se bloquea si la fase anterior EXISTE y aun no esta completada.
+  // Si no existe (flujos sin PICK, p. ej. recepcion -> pack), no se bloquea.
+  return !!(e && e.existe && !e.completado);
+}
+
+function respCelda(r, k) {
+  const f = (r.fases || {})[k];
+  if (!f || faseBloqueada(r, k)) return "\u2014";
+  if (!f.responsable) {
+    if (f.completado) return "\u2014";
+    return `<span class="sin-dueno">${SIN_DUENO[k]}</span>`;
+  }
+  const finTxt = f.fin || (f.completado ? "\u2014" : "En curso");
+  const title = `Asignado: ${f.asignado || "\u2014"} | Inicio: ${f.inicio || "\u2014"} | ` +
+    `Fin: ${finTxt} | Espera: ${f.espera_legible || "0h 0m"} + ` +
+    `Ejecuci\u00f3n: ${f.ejecucion_legible || "0h 0m"} = ${f.legible || "\u2014"}`;
+  return `<span title="${esc(title)}">${esc(f.responsable)}</span>`;
+}
+
+function renderTable(rows = FILAS, vacio) {
   const host = $("#tableHost");
-  if (!FILAS.length) {
-    host.innerHTML = `<div class="empty"><b>${esc(MENSAJE_VACIO || "Sin pedidos en el rango seleccionado.")}</b></div>`;
+  if (!rows.length) {
+    host.innerHTML = `<div class="empty"><b>${esc(vacio || MENSAJE_VACIO || "Sin pedidos en el rango seleccionado.")}</b></div>`;
     $("#tblCount").textContent = "";
     return;
   }
-  const filas = FILAS.slice().sort((a, b) => {
+  const filas = rows.slice().sort((a, b) => {
     const r = String(a.pedido_nombre).localeCompare(String(b.pedido_nombre), undefined,
       { numeric: true, sensitivity: "base" });
     return sortAsc ? r : -r;
   });
 
-  const body = filas.map(r => {
-    const ult = ultimaFase(r);
-    const det = ult ? r.detalles_operacion[ult] : null;
-    const hito = ult ? `<span class="pill hito ${ult}">${HITO[ult]}</span>` : "";
-    return `<tr>
+  // Maximo comun de tiempos de fase: base de la escala de todas las barras.
+  let maxTl = 1;
+  filas.forEach(r => FASES_TL.forEach(f => {
+    const v = (r.tiempos_fases_minutos || {})[f.k] || 0;
+    if (v > maxTl) maxTl = v;
+  }));
+
+  const body = filas.map(r => `<tr>
       <td><b>${esc(r.pedido_nombre)}</b></td>
       <td>${esc(r.cliente)}</td>
-      <td>${esc(det ? det.responsable : "\u2014")}</td>
-      <td><code>${esc(det ? det.documento : "\u2014")}</code></td>
+      <td>${respCelda(r, "pick")}</td>
+      <td>${respCelda(r, "pack")}</td>
+      <td>${respCelda(r, "out")}</td>
+      <td>${esc(r.fecha_confirmacion || r.fecha_asignacion || "\u2014")}</td>
       <td class="c">${r.total_items}</td>
-      <td>${celdaMultifase(r)}</td>
-      <td><div class="espera">${hito}<span class="pill">${esc(r.tiempo_espera_previo_legible || "\u2014")}</span></div></td>
-    </tr>`;
-  }).join("");
+      <td>${celdaMultifase(r, maxTl)}</td>
+    </tr>`).join("");
 
   host.innerHTML = `<table>
     <thead><tr>
       <th class="sortable" id="thId">Pedido <i class="sarrow">${sortAsc ? "\u25b2" : "\u25bc"}</i></th>
       <th>Cliente</th>
-      <th>Responsable</th>
-      <th>Documento</th>
+      <th>Resp. PICK</th>
+      <th>Resp. PACK</th>
+      <th>Resp. OUT</th>
+      <th>Fecha y hora de confirmación</th>
       <th class="c">Items</th>
       <th>Tiempos por fase</th>
-      <th>Espera previo</th>
     </tr></thead>
     <tbody>${body}</tbody>
   </table>`;
@@ -516,8 +732,190 @@ function renderTable() {
 $("#tableHost").addEventListener("click", e => {
   if (!e.target.closest("#thId")) return;
   sortAsc = !sortAsc;
-  renderTable();
+  renderTable(filasRol(FILAS));
 });
+
+/* ---------------- mejor despachador mensual: pedidos y promedio ---------------- */
+const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
+               "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+function mesDeFase(r, k, faseLarga) {
+  const det = (r.detalles_operacion || {})[faseLarga] || {};
+  let f = det.fecha || "";
+  if (!/^\d{4}-\d{2}/.test(f)) {
+    const info = (r.fases || {})[k] || {};
+    const txt = info.fin || info.inicio || "";
+    const m = txt.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m) f = `${m[3]}-${m[2]}`;
+  }
+  if (!/^\d{4}-\d{2}/.test(f)) return null;
+  const y = f.slice(0, 4), mo = parseInt(f.slice(5, 7), 10);
+  if (!(mo >= 1 && mo <= 12)) return null;
+  return { key: f.slice(0, 7), label: `${MESES[mo - 1]} ${y}` };
+}
+
+function renderMensual(rows) {
+  const host = $("#mensualHost");
+  const FASES = [
+    { k: "pick", fase: "picking" },
+    { k: "pack", fase: "packing" },
+    { k: "out",  fase: "output" }
+  ];
+  const acc = {};
+  (rows || []).forEach(r => {
+    FASES.forEach(f => {
+      const info = (r.fases || {})[f.k];
+      if (!info || !info.responsable || !info.completado) return;
+      const mes = mesDeFase(r, f.k, f.fase);
+      if (!mes) return;
+      const key = `${mes.key}|${info.responsable}`;
+      const a = acc[key] || (acc[key] = {
+        key: mes.key, mes: mes.label, resp: info.responsable,
+        pedidos: new Set(), act: 0, ejec: 0
+      });
+      a.pedidos.add(r.pedido_id != null ? r.pedido_id : r.pedido_nombre);
+      a.act += 1;
+      a.ejec += Number(info.ejecucion_minutos) || 0;
+    });
+  });
+
+  const all = Object.values(acc);
+  if (!all.length) {
+    host.innerHTML = `<div class="empty">Sin actividades de despacho en el rango seleccionado.</div>`;
+    $("#mensualCount").textContent = "";
+    return;
+  }
+
+  /* Un solo ganador: se toma el mes mas reciente del rango y se ordena por
+     cantidad de pedidos (desc) y luego por tiempo promedio por actividad (asc). */
+  const meses = [...new Set(all.map(a => a.key))].sort();
+  const mesKey = meses[meses.length - 1];
+  const mesLabel = all.find(a => a.key === mesKey).mes;
+  const cand = all.filter(a => a.key === mesKey);
+  const prom = a => a.act ? a.ejec / a.act : 0;
+  cand.sort((a, b) =>
+    b.pedidos.size - a.pedidos.size ||
+    prom(a) - prom(b) ||
+    b.act - a.act ||
+    a.resp.localeCompare(b.resp));
+
+  const w = cand[0];
+  const titulo = cand.length === 1 ? "Despachador del mes" : "Mejor despachador";
+  const fmt = m => {
+    m = Math.max(0, Math.round(Number(m) || 0));
+    return `${Math.floor(m / 60)}h ${m % 60}m`;
+  };
+  host.innerHTML = `<div class="winner">
+      <div class="who">
+        <div class="medal">1</div>
+        <div>
+          <div class="name">${esc(w.resp)}</div>
+          <div class="sub">${titulo} &middot; ${esc(mesLabel)}</div>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><span>Pedidos</span><b>${w.pedidos.size}</b></div>
+        <div class="stat"><span>Actividades</span><b>${w.act}</b></div>
+        <div class="stat" title="Promedio del tiempo de ejecuci&oacute;n de todas sus actividades (sin espera)">
+          <span>Tiempo promedio</span><b>${fmt(prom(w))}</b></div>
+      </div>
+    </div>`;
+  $("#mensualCount").textContent =
+    `Mes: ${mesLabel}${meses.length > 1 ? " (\u00faltimo del rango)" : ""} \u00b7 ` +
+    `${cand.length} despachador${cand.length === 1 ? "" : "es"} con actividad \u00b7 ` +
+    `criterio: m\u00e1s pedidos y, a igualdad, menor tiempo promedio`;
+}
+
+/* ---------------- productividad: agregados por trabajador ----------------
+   Todo se calcula sobre el reporte ya filtrado (empresa, fechas,
+   despachador y actividad) con los responsables reales de Odoo, unificados
+   segun las reglas del servidor. Solo cuentan actividades con responsable y
+   ya completadas: el trabajo en curso todavia no es productividad medible. */
+const FASE_NOMBRE = { picking: "Picking", packing: "Packing", output: "Output" };
+
+const fmtDur = m => {
+  m = Math.max(0, Math.round(Number(m) || 0));
+  return m ? `${Math.floor(m / 60)}h ${m % 60}m` : "0h 0m";
+};
+
+function agregarProductividad(rows) {
+  const acc = {};
+  (rows || []).forEach(r => {
+    const items = Number(r.total_items) || 0;
+    FASES_TL.forEach(f => {
+      const info = (r.fases || {})[FASE_KEY[f.k]];
+      if (!info || !info.responsable || !info.completado) return;
+      const e = acc[info.responsable] || (acc[info.responsable] = { resp: info.responsable, porFase: {} });
+      const pf = e.porFase[f.k] || (e.porFase[f.k] = { pedidos: 0, articulos: 0, minutos: 0 });
+      pf.pedidos += 1;
+      pf.articulos += items;
+      pf.minutos += Number(info.minutos_netos) || 0;
+    });
+  });
+  return Object.values(acc);
+}
+
+/* ---- grafica comparativa: tiempo promedio por etapa ---- */
+function renderPromedios(rows) {
+  const host = $("#promHost");
+  const datos = FASES_TL.map(f => {
+    const fs = (rows || []).map(r => (r.fases || {})[FASE_KEY[f.k]]).filter(x => x && x.completado);
+    const n = fs.length;
+    const suma = k => fs.reduce((a, x) => a + (Number(x[k]) || 0), 0);
+    return { f, n, esp: n ? suma("espera_minutos") / n : 0,
+             eje: n ? suma("ejecucion_minutos") / n : 0,
+             tot: n ? suma("minutos_netos") / n : 0 };
+  });
+  if (!datos.some(d => d.n)) {
+    host.innerHTML = `<div class="empty">Sin actividades completadas en el rango.</div>`;
+    return;
+  }
+  const max = Math.max(1, ...datos.map(d => d.tot));
+  host.innerHTML = datos.map(d => {
+    const pct = d.tot > 0 ? Math.max(1.5, d.tot / max * 100) : 0;
+    const title = `${FASE_NOMBRE[d.f.k]}: promedio de ${d.n} actividades completadas | ` +
+      `espera ${fmtDur(d.esp)} + ejecuci\u00f3n ${fmtDur(d.eje)} = ${fmtDur(d.tot)}`;
+    return `<div class="prom-row" title="${esc(title)}">
+        <span class="prom-lab">${d.f.lab}</span>
+        <span class="prom-track"><span class="prom-fill ${d.f.k}" style="width:${pct.toFixed(2)}%"></span></span>
+        <span class="prom-val">${fmtDur(d.tot)}</span>
+      </div>`;
+  }).join("") + `<div class="hint">${datos.map(d => `${d.f.lab}: ${d.n}`).join(" \u00b7 ")} actividades completadas</div>`;
+}
+
+/* ---- graficos independientes de productividad por etapa ---- */
+function renderProdFases(rows) {
+  const host = $("#fasesHost");
+  const datos = agregarProductividad(rows);
+  host.innerHTML = FASES_TL.map(f => {
+    const ents = datos
+      .map(e => ({ resp: e.resp, pf: e.porFase[f.k] || { pedidos: 0, articulos: 0, minutos: 0 } }))
+      .filter(p => p.pf.pedidos > 0)
+      .sort((a, b) => b.pf.pedidos - a.pf.pedidos || a.resp.localeCompare(b.resp));
+    const max = Math.max(1, ...ents.map(p => p.pf.pedidos));
+    const top = ents.slice(0, 8);
+    const cuerpo = !ents.length
+      ? `<div class="pf-empty">Sin actividades completadas.</div>`
+      : top.map(p => {
+          const pct = Math.max(2, p.pf.pedidos / max * 100);
+          const title = `${p.resp}: ${p.pf.pedidos} pedido${p.pf.pedidos === 1 ? "" : "s"} \u00b7 ` +
+            `${p.pf.articulos} art\u00edculo${p.pf.articulos === 1 ? "" : "s"} \u00b7 tiempo promedio ` +
+            `${fmtDur(p.pf.minutos / p.pf.pedidos)}`;
+          return `<div class="pf-row" title="${esc(title)}">
+              <span class="pf-name">${esc(p.resp)}</span>
+              <span class="pf-track"><span class="pf-bar ${f.k}" style="width:${pct.toFixed(1)}%"></span></span>
+              <b class="pf-val">${p.pf.pedidos}</b>
+            </div>`;
+        }).join("") +
+        (ents.length > top.length
+          ? `<div class="pf-more">+ ${ents.length - top.length} trabajador${ents.length - top.length === 1 ? "" : "es"} m\u00e1s con actividad</div>`
+          : "");
+    return `<div class="pf">
+        <div class="pf-head"><i class="pf-dot ${f.k}"></i>${f.lab} &middot; ${FASE_NOMBRE[f.k]}</div>
+        ${cuerpo}
+      </div>`;
+  }).join("");
+}
 
 /* ---------------- carga y render general ---------------- */
 function renderKpis(d) {
@@ -528,29 +926,59 @@ function renderKpis(d) {
   $("#kpiTotal").textContent = d ? (d.total_pedidos_analizados || 0) : 0;
 }
 
+function pintar() {
+  const rows = filasRol(FILAS);
+  const msg = mensajeRol();
+  renderChart(rows, msg);
+  renderTable(rows, msg);
+  // La productividad se mide sobre el mismo conjunto filtrado (empresa,
+  // fechas, despachador y actividad) que la tabla y el grafico central.
+  renderPromedios(rows);
+  renderProdFases(rows);
+  $("#prodCount").textContent = rows.length
+    ? `${rows.length} pedido${rows.length === 1 ? "" : "s"} \u00b7 m\u00e9tricas sobre actividades completadas`
+    : "";
+  // El mejor despachador del mes es una metrica general: un solo ganador
+  // entre todos los despachadores. Con el reporte filtrado por un
+  // despachador especifico se oculta, porque sus datos ya no representan
+  // al conjunto.
+  if ($("#selUser").value === "0") {
+    $("#blockMensual").style.display = "";
+    renderMensual(FILAS);
+  } else {
+    $("#blockMensual").style.display = "none";
+    $("#mensualCount").textContent = "";
+  }
+  if (rows.length) {
+    $("#tblCount").textContent = `${rows.length} pedido${rows.length === 1 ? "" : "s"}` +
+      (ROL === "todo" ? "" : ` \u00b7 actividad ${FASE_ETIQUETA[ROL]}` +
+        ($("#selUser").value === "0" ? "" : ` de ${ROL_LABEL[ROL]}`));
+  }
+  $("#btnXlsx").disabled = rows.length === 0;
+  actualizarTabs();
+}
+
 function render(d) {
   if (!d.ok || !d.detalles_por_pedido.length) {
     FILAS = [];
     MENSAJE_VACIO = d.mensaje || "Sin pedidos en el rango seleccionado.";
+    ROL = "todo";
     renderKpis(d.ok ? d : null);
     $("#tblCount").textContent = "";
-    renderChart([]);
-    renderTable();
-    $("#btnXlsx").disabled = true;
+    pintar();
     return;
   }
   FILAS = d.detalles_por_pedido;
   MENSAJE_VACIO = "";
+  if (ROL !== "todo" && !filasRol(FILAS).length) ROL = "todo";
   renderKpis(d);
-  $("#tblCount").textContent = `${d.total_pedidos_analizados} pedidos`;
-  renderChart(FILAS);
-  renderTable();
-  $("#btnXlsx").disabled = FILAS.length === 0;
+  pintar();
 }
 
 $("#btnGen").addEventListener("click", async () => {
   const desde = $("#fDesde").value, hasta = $("#fHasta").value;
   if (!desde || !hasta) { modalError("Seleccione el rango de fechas (desde y hasta)."); return; }
+  RANGO = { desde, hasta };
   const btn = $("#btnGen");
   btn.disabled = true;
   $("#status").innerHTML = '<span class="spin"></span>Consultando el ERP...';
@@ -567,6 +995,11 @@ $("#btnGen").addEventListener("click", async () => {
       renderChart([]);
       $("#tableHost").innerHTML = `<div class="denied"><h3>Acceso denegado</h3>
         <p>${esc(err.message)}</p></div>`;
+      $("#mensualHost").innerHTML = `<div class="empty">Sin actividades de despacho.</div>`;
+      $("#mensualCount").textContent = "";
+      $("#promHost").innerHTML = `<div class="empty">Sin actividades de despacho.</div>`;
+      $("#fasesHost").innerHTML = `<div class="empty">Sin actividades de despacho.</div>`;
+      $("#prodCount").textContent = "";
       $("#tblCount").textContent = "";
       $("#btnXlsx").disabled = true;
     } else {
@@ -580,7 +1013,8 @@ $("#btnGen").addEventListener("click", async () => {
 $("#btnXlsx").addEventListener("click", () => {
   const desde = $("#fDesde").value, hasta = $("#fHasta").value;
   if (!desde || !hasta) { modalError("Seleccione el rango de fechas (desde y hasta)."); return; }
-  const params = new URLSearchParams({ empresa: $("#selEmpresa").value, user_id: $("#selUser").value, desde, hasta });
+  const params = new URLSearchParams({ empresa: $("#selEmpresa").value, user_id: $("#selUser").value,
+    desde, hasta, rol: ROL });
   location.href = "/api/despacho/export?" + params.toString();
 });
 

@@ -1,21 +1,8 @@
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 53863)
 Traceback (most recent call last):
-  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 683, in process_request_thread
-    self.finish_request(request, client_address)
-  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 360, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socketserver.py", line 747, in __init__
-    self.handle()
-  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\http\server.py", line 435, in handle
-    self.handle_one_request()
-  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\http\server.py", line 401, in handle_one_request
-    self.raw_requestline = self.rfile.readline(65537)
-  File "C:\Users\Usuario\AppData\Local\Programs\Python\Python310\lib\socket.py", line 705, in readinto
-    return self._sock.recv_into(b)
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-----------------------------------------
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1939, in do_GET
+    cid, pid = int(one("company_id")), int(one("product_id"))
+TypeError: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
 Traceback (most recent call last):
-  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1213, in do_GET
+  File "C:\Users\Usuario\FIMASCHAT\TableroyReportes\app\kardex_server.py", line 1939, in do_GET
     cid, pid = int(one("company_id")), int(one("product_id"))
 TypeError: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
